@@ -7,8 +7,8 @@ export interface Step {
   id: string;
   title: string;
   execution: PromptConfig;
-  validation: PromptConfig;
-  successCondition: PromptConfig;
+  successCondition: PromptConfig; // Renamed to Evaluator Prompt in UI, but keeping key for compatibility or renaming it?
+  // validation: PromptConfig; // REMOVED
   order_index: number;
 }
 
@@ -18,11 +18,10 @@ export interface DbStep {
   title: string;
   execution_prompt: string;
   execution_inject_user: boolean;
-  validation_prompt: string;
-  validation_inject_user: boolean;
+  // validation_prompt: string; // REMOVED
+  // validation_inject_user: boolean; // REMOVED
   success_prompt: string;
   success_inject_user: boolean;
   order_index: number;
   created_at?: string;
 }
-

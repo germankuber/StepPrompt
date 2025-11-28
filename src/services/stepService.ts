@@ -126,10 +126,6 @@ const mapDbToStep = (db: DbStep): Step => ({
     content: db.execution_prompt || '',
     injectUserMessage: db.execution_inject_user || false,
   },
-  validation: {
-    content: db.validation_prompt || '',
-    injectUserMessage: db.validation_inject_user || false,
-  },
   successCondition: {
     content: db.success_prompt || '',
     injectUserMessage: db.success_inject_user || false,
@@ -142,8 +138,6 @@ const mapStepToDb = (step: Step): DbStep & { scenario_id?: string } => ({
   order_index: step.order_index,
   execution_prompt: step.execution.content,
   execution_inject_user: step.execution.injectUserMessage,
-  validation_prompt: step.validation.content,
-  validation_inject_user: step.validation.injectUserMessage,
   success_prompt: step.successCondition.content,
   success_inject_user: step.successCondition.injectUserMessage,
 });

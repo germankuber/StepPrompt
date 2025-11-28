@@ -9,7 +9,7 @@ import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { 
   Plus, Save, Loader2, Play, Settings, 
   Layout, List, Box, FlaskConical,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ArrowLeft
 } from 'lucide-react';
 import { stepService } from './services/stepService';
 import { aiService } from './services/aiService';
@@ -30,7 +30,9 @@ function App() {
     return saved ? JSON.parse(saved) : [];
   });
   const [loading, setLoading] = useState(false);
-  const [isSimulating, setIsSimulating] = useState(false);
+  // isSimulating is now handled by navigation tab logic primarily, 
+  // but we keep state to toggle views
+  const [isSimulating, setIsSimulating] = useState(false); 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   
   // Edit Scenario State
@@ -43,7 +45,7 @@ function App() {
   const [stepToDeleteId, setStepToDeleteId] = useState<string | null>(null);
 
   // Navigation state
-  const [activeTab, setActiveTab] = useState<'editor' | 'scenarios'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'scenarios' | 'simulation'>('editor');
   const [currentScenarioName, setCurrentScenarioName] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
@@ -67,6 +69,15 @@ function App() {
   useEffect(() => {
     localStorage.setItem('openai_model_name', modelName);
   }, [modelName]);
+
+  // Effect to handle simulation state when switching tabs manually
+  useEffect(() => {
+      if (activeTab === 'simulation') {
+          setIsSimulating(true);
+      } else {
+          setIsSimulating(false);
+      }
+  }, [activeTab]);
 
   const handleLoadScenario = async (scenarioId: string, name: string) => {
     setLoading(true);
@@ -115,9 +126,6 @@ function App() {
           await stepService.updateScenarioName(editingScenarioId, newName);
           toast.success('Scenario renamed successfully');
           setIsEditModalOpen(false);
-          // Refresh logic is handled by SavedScenariosList reloading on mount/update, 
-          // or we could force a refresh if we lifted state up more.
-          // For now, toggling tab refreshes it effectively.
           setActiveTab('editor'); 
           setTimeout(() => setActiveTab('scenarios'), 50); 
       } catch (error) {
@@ -133,7 +141,6 @@ function App() {
       title: `Step ${steps.length + 1}`,
       order_index: steps.length,
       execution: { content: '', injectUserMessage: false },
-      validation: { content: '', injectUserMessage: false },
       successCondition: { content: '', injectUserMessage: false },
     };
     setSteps([...steps, newStep]);
@@ -163,6 +170,18 @@ function App() {
           throw new Error(errorMsg);
       }
       return await aiService.executeStep(message, step, apiKey.trim(), modelName);
+  };
+
+  const startSimulation = () => {
+      if (steps.length === 0) {
+          toast.error("No steps defined", { description: "Add at least one step to run a simulation." });
+          return;
+      }
+      setActiveTab('simulation');
+  };
+
+  const stopSimulation = () => {
+      setActiveTab('editor');
   };
 
   const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
@@ -222,6 +241,12 @@ function App() {
                 onClick={() => setActiveTab('editor')} 
             />
             <SidebarItem 
+                icon={Play} 
+                label="Run Simulation" 
+                active={activeTab === 'simulation'} 
+                onClick={startSimulation} 
+            />
+            <SidebarItem 
                 icon={List} 
                 label="Saved Scenarios" 
                 active={activeTab === 'scenarios'} 
@@ -254,12 +279,22 @@ function App() {
         
         {/* Top Header */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0 z-10">
-            <h1 className="text-lg font-semibold text-gray-800">
-                {activeTab === 'editor' 
-                    ? (isSimulating ? 'Running Simulation' : `Editing: ${currentScenarioName || 'New Scenario'}`)
-                    : 'Saved Scenarios'
-                }
-            </h1>
+            <div className="flex items-center gap-4">
+                {activeTab === 'simulation' && (
+                    <button 
+                        onClick={stopSimulation}
+                        className="p-2 -ml-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
+                        title="Back to Editor"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                )}
+                <h1 className="text-lg font-semibold text-gray-800">
+                    {activeTab === 'editor' && (currentScenarioName ? `Editing: ${currentScenarioName}` : 'New Scenario')}
+                    {activeTab === 'simulation' && 'Simulation Runner'}
+                    {activeTab === 'scenarios' && 'Saved Scenarios'}
+                </h1>
+            </div>
 
             <div className="flex items-center gap-4">
                 {/* Action Buttons (Only visible in Editor) */}
@@ -274,24 +309,15 @@ function App() {
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                         </button>
                         <button 
-                            onClick={() => setIsSimulating(!isSimulating)}
-                            className={clsx(
-                                "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                                isSimulating 
-                                    ? "bg-red-50 text-red-600 hover:bg-red-100" 
-                                    : "bg-green-50 text-green-600 hover:bg-green-100"
-                            )}
+                            onClick={startSimulation}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-green-50 text-green-600 hover:bg-green-100"
                         >
-                            {isSimulating ? (
-                                <>Stop Run</>
-                            ) : (
-                                <><Play className="w-4 h-4" /> Run</>
-                            )}
+                            <Play className="w-4 h-4" /> Run
                         </button>
                     </div>
                 )}
 
-                {/* Settings Controls */}
+                {/* Settings Controls (Always visible or maybe hidden in simulation for immersion? Kept for now) */}
                 <div className="flex items-center gap-3">
                     <div className="hidden md:flex items-center gap-2 bg-gray-100 rounded-md px-3 py-1.5">
                         <Settings className="w-3.5 h-3.5 text-gray-500" />
@@ -322,65 +348,53 @@ function App() {
             {/* EDITOR VIEW */}
             {activeTab === 'editor' && (
                 <div className="h-full">
-                    <div className={clsx(
-                        "grid gap-6 transition-all duration-300 h-full",
-                        isSimulating ? "grid-cols-1 lg:grid-cols-12" : "grid-cols-1"
-                    )}>
-                        
-                        {/* Left Panel: Config */}
-                        <div className={clsx(
-                            "transition-all duration-300",
-                            isSimulating ? "lg:col-span-7" : "lg:col-span-12"
-                        )}>
-                            <div className="space-y-6 pb-20">
-                                {steps.map((step, index) => (
-                                    <StepEditor 
-                                        key={step.id} 
-                                        step={{...step, order_index: index}} 
-                                        onUpdate={updateStep}
-                                        onDelete={confirmDeleteStep}
-                                    />
-                                ))}
+                    <div className="space-y-6 pb-20">
+                        {steps.map((step, index) => (
+                            <StepEditor 
+                                key={step.id} 
+                                step={{...step, order_index: index}} 
+                                onUpdate={updateStep}
+                                onDelete={confirmDeleteStep}
+                            />
+                        ))}
 
-                                {steps.length === 0 && (
-                                    <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
-                                        <div className="flex justify-center mb-4">
-                                            <Box className="w-12 h-12 text-gray-300" />
-                                        </div>
-                                        <h3 className="text-lg font-medium text-gray-900">Start a new scenario</h3>
-                                        <p className="text-gray-500 mb-6">Define your first execution step to get started.</p>
-                                        <button 
-                                            onClick={addStep}
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
-                                        >
-                                            <Plus className="w-5 h-5" />
-                                            Add First Step
-                                        </button>
-                                    </div>
-                                )}
-
-                                {steps.length > 0 && (
-                                    <button 
-                                        onClick={addStep}
-                                        className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all flex items-center justify-center gap-2 font-medium"
-                                    >
-                                        <Plus className="w-5 h-5" />
-                                        Add Next Step
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Right Panel: Runner */}
-                        {isSimulating && (
-                            <div className="lg:col-span-5 h-[calc(100vh-8rem)] sticky top-0">
-                                <SimulationRunner 
-                                    steps={steps} 
-                                    onExecute={handleExecuteStep}
-                                />
+                        {steps.length === 0 && (
+                            <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+                                <div className="flex justify-center mb-4">
+                                    <Box className="w-12 h-12 text-gray-300" />
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900">Start a new scenario</h3>
+                                <p className="text-gray-500 mb-6">Define your first execution step to get started.</p>
+                                <button 
+                                    onClick={addStep}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+                                >
+                                    <Plus className="w-5 h-5" />
+                                    Add First Step
+                                </button>
                             </div>
                         )}
+
+                        {steps.length > 0 && (
+                            <button 
+                                onClick={addStep}
+                                className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/50 transition-all flex items-center justify-center gap-2 font-medium"
+                            >
+                                <Plus className="w-5 h-5" />
+                                Add Next Step
+                            </button>
+                        )}
                     </div>
+                </div>
+            )}
+
+            {/* SIMULATION RUNNER VIEW (Full Screen) */}
+            {activeTab === 'simulation' && (
+                <div className="h-full">
+                    <SimulationRunner 
+                        steps={steps} 
+                        onExecute={handleExecuteStep}
+                    />
                 </div>
             )}
 

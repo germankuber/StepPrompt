@@ -22,8 +22,8 @@ const PromptSection = ({
   title: string; 
   icon: React.ElementType; 
   config: PromptConfig; 
-  type: 'execution' | 'validation' | 'successCondition';
-  onUpdate: (type: 'execution' | 'validation' | 'successCondition', field: keyof PromptConfig, value: any) => void;
+  type: 'execution' | 'successCondition';
+  onUpdate: (type: 'execution' | 'successCondition', field: keyof PromptConfig, value: any) => void;
 }) => (
   <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
     <div className="flex items-center gap-2 mb-3">
@@ -75,7 +75,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
       }
   };
 
-  const updatePrompt = (key: 'execution' | 'validation' | 'successCondition', field: keyof PromptConfig, value: any) => {
+  const updatePrompt = (key: 'execution' | 'successCondition', field: keyof PromptConfig, value: any) => {
     onUpdate({
       ...step,
       [key]: {
@@ -130,7 +130,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
       {/* Collapsible Content */}
       {isExpanded && (
         <div className="p-6 animate-in slide-in-from-top-2 duration-200">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <PromptSection 
                 title="Execution Context" 
                 icon={Play} 
@@ -139,14 +139,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
                 onUpdate={updatePrompt}
                 />
                 <PromptSection 
-                title="Validation Prompt" 
-                icon={MessageSquare} 
-                config={step.validation} 
-                type="validation" 
-                onUpdate={updatePrompt}
-                />
-                <PromptSection 
-                title="Success Condition" 
+                title="Evaluator Prompt" 
                 icon={CheckCircle} 
                 config={step.successCondition} 
                 type="successCondition" 

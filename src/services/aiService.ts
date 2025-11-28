@@ -4,7 +4,6 @@ import type { Step } from "../types";
 
 export const aiService = {
   async executeStep(userMessage: string, step: Step, apiKey: string, modelName: string = "gpt-4o-mini"): Promise<string> {
-    // Ensure we have a valid string
     const key = apiKey?.trim();
     
     if (!key) {
@@ -12,16 +11,14 @@ export const aiService = {
     }
 
     const chat = new ChatOpenAI({
-      apiKey: key, // Using 'apiKey' which is standard in newer SDKs
+      apiKey: key,
       modelName: modelName, 
       temperature: 0.7,
-      // dangerouslyAllowBrowser is often a top-level option in @langchain/openai, 
-      // but sometimes passed via configuration depending on exact version.
-      // We'll pass it at top level AND in configuration to be safe.
+      // @ts-ignore - 'dangerouslyAllowBrowser' is valid in runtime for browser usage but might not be in type definition depending on version
       dangerouslyAllowBrowser: true,
-      // configuration: {
-      //   dangerouslyAllowBrowser: true
-      // }
+      configuration: {
+        dangerouslyAllowBrowser: true
+      }
     });
 
     const messages = [];
@@ -41,7 +38,56 @@ export const aiService = {
     }
   },
 
-  async validateResponse(response: string, step: Step, apiKey: string): Promise<boolean> {
-      return true;
+  async evaluateResponse(
+      aiResponse: string, 
+      userEvalCriteria: string, 
+      step: Step, 
+      apiKey: string, 
+      modelName: string = "gpt-4o-mini"
+  ): Promise<string> {
+    const key = apiKey?.trim();
+    if (!key) throw new Error("Missing API Key");
+
+    const chat = new ChatOpenAI({
+      apiKey: key,
+      modelName: modelName,
+      temperature: 0, // Deterministic for evaluation
+      // @ts-ignore
+      dangerouslyAllowBrowser: true,
+      configuration: { dangerouslyAllowBrowser: true }
+    });
+
+    const messages = [];
+
+    // System Prompt: The Success Condition defined in the Step
+    // If no success condition is defined, we provide a default judge persona
+    const systemPrompt = step.successCondition.content 
+        ? step.successCondition.content 
+        : "You are an impartial judge evaluating an AI's response based on specific criteria.";
+    
+    messages.push(new SystemMessage(systemPrompt));
+
+    // User Prompt: The Evaluation Context
+    const evalContent = `
+    [CONTEXT]
+    The AI produced the following output:
+    "${aiResponse}"
+
+    [EVALUATION CRITERIA]
+    ${userEvalCriteria}
+
+    [INSTRUCTION]
+    Evaluate if the output meets the criteria. Be concise.
+    `;
+
+    messages.push(new HumanMessage(evalContent));
+
+    try {
+        const response = await chat.invoke(messages);
+        return typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+    } catch (error) {
+        console.error("AI Evaluation Error:", error);
+        throw error;
+    }
   }
 };
