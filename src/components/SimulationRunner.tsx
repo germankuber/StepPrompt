@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Step } from '../types';
-import { Send, PlayCircle, Bot, User, CheckCircle, XCircle, Gavel, ArrowRight, X } from 'lucide-react';
+import { Send, PlayCircle, Bot, User, CheckCircle, XCircle, Gavel, ArrowRight, X, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
 import clsx from 'clsx';
+import { ResetConfirmationModal } from './ResetConfirmationModal';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  stepTitle?: string;
 }
 
 interface SimulationRunnerProps {
@@ -27,11 +29,16 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   const [evalResult, setEvalResult] = useState<string | null>(null);
   // Store the user's evaluation criteria message to add it to history later
   const [lastUserEvalCriteria, setLastUserEvalCriteria] = useState<string | null>(null);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const currentStep = steps[currentStepIndex];
-  const isLastStep = currentStepIndex === steps.length - 1;
+  // Use steps directly as passed from App.tsx to respect the user's visual order
+  // Do NOT sort by order_index as it might be stale/buggy
+  const sortedSteps = steps;
+
+  const currentStep = sortedSteps[currentStepIndex];
+  const isLastStep = currentStepIndex === sortedSteps.length - 1;
 
   // Helper to get API key from storage (duplication from App.tsx, ideally context/prop but keeping simple)
   const getApiKey = () => import.meta.env.VITE_OPENAI_API_KEY || localStorage.getItem('openai_api_key') || '';
@@ -54,7 +61,9 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
     // FLOW 1: Execute Step
     if (simState === 'idle') {
         setSimState('running_step');
-        setMessages(prev => [...prev, { role: 'user', content: userInput }]);
+        // Note: We use currentStepIndex + 1 to show the chronological step number, avoiding confusion if title is "Step 4"
+        const stepLabel = `Step ${currentStepIndex + 1}`;
+        setMessages(prev => [...prev, { role: 'user', content: userInput, stepTitle: stepLabel }]);
 
         try {
             // Pass conversation history (filtering out system messages)
@@ -63,11 +72,13 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
             const response = await onExecute(userInput, currentStep, history);
-            setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+            const stepLabel = `Step ${currentStepIndex + 1}`;
+            setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: stepLabel }]);
             setLastAiResponse(response);
             setSimState('waiting_for_eval'); // Move to Eval state
         } catch (error) {
-            setMessages(prev => [...prev, { role: 'system', content: 'Error: ' + String(error) }]);
+            const stepLabel = `Step ${currentStepIndex + 1}`;
+            setMessages(prev => [...prev, { role: 'system', content: 'Error: ' + String(error), stepTitle: stepLabel }]);
             setSimState('idle');
         }
     } 
@@ -111,15 +122,19 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   const handleNextStep = async () => {
       if (!isLastStep && lastUserEvalCriteria) {
           const nextIndex = currentStepIndex + 1;
-          const nextStep = steps[nextIndex];
+          const nextStep = sortedSteps[nextIndex];
           const textToSend = lastUserEvalCriteria;
 
           // 1. Update UI to show we moved and show user message (evaluation message becomes next user message)
           setCurrentStepIndex(nextIndex);
+          
+          // Use chronological step number for tags
+          const nextStepLabel = `Step ${nextIndex + 1}`;
+          
           setMessages(prev => [
               ...prev, 
-              { role: 'system', content: `--- Moving to Step ${nextIndex + 1}: ${nextStep.title} ---` },
-              { role: 'user', content: textToSend }
+              { role: 'system', content: `--- Moving to Step ${nextIndex + 1}: ${nextStep.title} ---`, stepTitle: nextStepLabel },
+              { role: 'user', content: textToSend, stepTitle: nextStepLabel }
           ]);
           
           // 2. Clear Eval state
@@ -140,13 +155,15 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
               const updatedHistory = [...currentHistory, { role: 'user', content: textToSend }];
 
               const response = await onExecute(textToSend, nextStep, updatedHistory);
+              const nextStepLabel = `Step ${nextIndex + 1}`;
               
-              setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+              setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: nextStepLabel }]);
               setLastAiResponse(response);
               setSimState('waiting_for_eval');
 
           } catch (error) {
-              setMessages(prev => [...prev, { role: 'system', content: 'Error: ' + String(error) }]);
+              const nextStepLabel = `Step ${nextIndex + 1}`;
+              setMessages(prev => [...prev, { role: 'system', content: 'Error: ' + String(error), stepTitle: nextStepLabel }]);
               setSimState('idle');
           }
       } else if (isLastStep) {
@@ -159,6 +176,17 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       setEvalResult(null);
       setLastUserEvalCriteria(null); // Clear stored criteria to let them type new one
       setInput(''); 
+  };
+
+  const handleReset = () => {
+      setCurrentStepIndex(0);
+      setMessages([]);
+      setInput('');
+      setSimState('idle');
+      setLastAiResponse(null);
+      setEvalResult(null);
+      setLastUserEvalCriteria(null);
+      toast.info("Simulation restarted");
   };
 
   if (!currentStep) {
@@ -179,11 +207,20 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 {simState === 'waiting_for_eval' && <span className="ml-2 text-orange-600 font-medium">• Waiting for Evaluation</span>}
             </p>
         </div>
-        <div className="text-xs px-3 py-1 bg-gray-100 rounded-full text-gray-500 font-mono">
-            {simState === 'idle' && 'Ready for Input'}
-            {simState === 'running_step' && 'Executing...'}
-            {simState === 'waiting_for_eval' && 'Evaluation Phase'}
-            {simState === 'reviewing_eval' && 'Decision Phase'}
+        <div className="flex items-center gap-3">
+            <div className="text-xs px-3 py-1 bg-gray-100 rounded-full text-gray-500 font-mono">
+                {simState === 'idle' && 'Ready for Input'}
+                {simState === 'running_step' && 'Executing...'}
+                {simState === 'waiting_for_eval' && 'Evaluation Phase'}
+                {simState === 'reviewing_eval' && 'Decision Phase'}
+            </div>
+            <button
+                onClick={() => setIsResetModalOpen(true)}
+                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                title="Restart Simulation"
+            >
+                <RotateCcw className="w-5 h-5" />
+            </button>
         </div>
       </div>
 
@@ -215,6 +252,11 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                    <div className="flex items-center gap-2 mb-2 opacity-80 text-xs font-bold uppercase tracking-wide">
                      {msg.role === 'user' ? <User className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
                      <span>{msg.role}</span>
+                     {msg.stepTitle && (
+                       <span className="ml-auto text-xs font-normal normal-case bg-black/10 px-2 py-0.5 rounded-full">
+                         {msg.stepTitle}
+                       </span>
+                     )}
                    </div>
                )}
                <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
@@ -322,6 +364,12 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
             </div>
         </div>
       )}
+
+      <ResetConfirmationModal 
+          isOpen={isResetModalOpen}
+          onClose={() => setIsResetModalOpen(false)}
+          onConfirm={handleReset}
+      />
     </div>
   );
 };
