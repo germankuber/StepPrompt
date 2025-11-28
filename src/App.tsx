@@ -9,7 +9,7 @@ import { DeleteConfirmationModal } from './components/DeleteConfirmationModal';
 import { 
   Plus, Save, Loader2, Play, Settings, 
   Layout, List, Box, FlaskConical,
-  ChevronLeft, ChevronRight, ArrowLeft
+  ChevronLeft, ChevronRight, ArrowLeft, Globe, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { stepService } from './services/stepService';
 import { aiService } from './services/aiService';
@@ -29,6 +29,11 @@ function App() {
     const saved = localStorage.getItem('simulation_steps');
     return saved ? JSON.parse(saved) : [];
   });
+  // Generic Prompts State
+  const [genericExecutionPrompt, setGenericExecutionPrompt] = useState(() => localStorage.getItem('generic_execution_prompt') || '');
+  const [genericEvaluatorPrompt, setGenericEvaluatorPrompt] = useState(() => localStorage.getItem('generic_evaluator_prompt') || '');
+  const [isGlobalConfigExpanded, setIsGlobalConfigExpanded] = useState(false);
+
   const [loading, setLoading] = useState(false);
   // isSimulating is now handled by navigation tab logic primarily, 
   // but we keep state to toggle views
@@ -59,6 +64,14 @@ function App() {
   useEffect(() => {
     localStorage.setItem('simulation_steps', JSON.stringify(steps));
   }, [steps]);
+
+  useEffect(() => {
+    localStorage.setItem('generic_execution_prompt', genericExecutionPrompt);
+  }, [genericExecutionPrompt]);
+
+  useEffect(() => {
+    localStorage.setItem('generic_evaluator_prompt', genericEvaluatorPrompt);
+  }, [genericEvaluatorPrompt]);
   
   useEffect(() => {
       if (apiKey && apiKey !== import.meta.env.VITE_OPENAI_API_KEY) {
@@ -82,8 +95,17 @@ function App() {
   const handleLoadScenario = async (scenarioId: string, name: string) => {
     setLoading(true);
     try {
+        // Load steps
         const loadedSteps = await stepService.getStepsForScenario(scenarioId);
         setSteps(loadedSteps);
+        
+        // Load scenario details (generic prompts)
+        const scenarioDetails = await stepService.getScenarioById(scenarioId);
+        if (scenarioDetails) {
+            setGenericExecutionPrompt(scenarioDetails.generic_execution_prompt || '');
+            setGenericEvaluatorPrompt(scenarioDetails.generic_evaluator_prompt || ''); 
+        }
+
         setCurrentScenarioName(name);
         setActiveTab('editor'); // Switch back to editor
         toast.success(`Loaded scenario: ${name}`);
@@ -98,7 +120,7 @@ function App() {
   const handleSaveScenario = async (name: string) => {
     setLoading(true);
     try {
-      await stepService.saveScenario(name, steps);
+      await stepService.saveScenario(name, steps, genericExecutionPrompt, genericEvaluatorPrompt);
       setCurrentScenarioName(name);
       toast.success(`Scenario "${name}" saved!`);
       setIsSaveModalOpen(false);
@@ -163,13 +185,25 @@ function App() {
     }
   };
 
-  const handleExecuteStep = async (message: string, step: Step) => {
+  // Updated handleExecuteStep to accept history and merge generic prompt
+  const handleExecuteStep = async (message: string, step: Step, history: Array<{ role: string, content: string }>) => {
       if (!apiKey.trim()) {
           const errorMsg = "OpenAI API Key is missing";
           toast.error(errorMsg, { description: "Please check settings in top right." });
           throw new Error(errorMsg);
       }
-      return await aiService.executeStep(message, step, apiKey.trim(), modelName);
+      
+      // Merge Generic Execution Prompt with Step Execution Prompt
+      const mergedStep = {
+          ...step,
+          execution: {
+              ...step.execution,
+              content: `${genericExecutionPrompt ? `[GLOBAL CONTEXT]\n${genericExecutionPrompt}\n\n` : ''}${step.execution.content}`
+          }
+      };
+
+      // Pass history to aiService
+      return await aiService.executeStep(message, mergedStep, apiKey.trim(), modelName, history);
   };
 
   const startSimulation = () => {
@@ -349,6 +383,50 @@ function App() {
             {activeTab === 'editor' && (
                 <div className="h-full">
                     <div className="space-y-6 pb-20">
+                        
+                        {/* Global Configuration Section */}
+                        <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+                            <div 
+                                className="flex justify-between items-center p-3 cursor-pointer hover:bg-gray-50 transition-colors bg-blue-50/30"
+                                onClick={() => setIsGlobalConfigExpanded(!isGlobalConfigExpanded)}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Globe className="w-4 h-4 text-blue-600" />
+                                    <h3 className="font-semibold text-gray-800 text-sm">Global Configuration (Generic Prompts)</h3>
+                                </div>
+                                <div className="text-gray-400">
+                                    {isGlobalConfigExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                </div>
+                            </div>
+                            
+                            {isGlobalConfigExpanded && (
+                                <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-200">
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                                            <Play className="w-3 h-3" /> Generic Execution Prompt
+                                        </label>
+                                        <textarea
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 font-mono text-xs"
+                                            value={genericExecutionPrompt}
+                                            onChange={(e) => setGenericExecutionPrompt(e.target.value)}
+                                            placeholder="Context that applies to ALL steps (prepended to step context)..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                                            <Box className="w-3 h-3" /> Generic Evaluator Prompt
+                                        </label>
+                                        <textarea
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 font-mono text-xs"
+                                            value={genericEvaluatorPrompt}
+                                            onChange={(e) => setGenericEvaluatorPrompt(e.target.value)}
+                                            placeholder="Evaluation rules that apply to ALL steps (prepended to evaluator criteria)..."
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {steps.map((step, index) => (
                             <StepEditor 
                                 key={step.id} 
@@ -394,6 +472,7 @@ function App() {
                     <SimulationRunner 
                         steps={steps} 
                         onExecute={handleExecuteStep}
+                        genericEvaluatorPrompt={genericEvaluatorPrompt}
                     />
                 </div>
             )}

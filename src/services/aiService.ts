@@ -1,9 +1,15 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import type { Step } from "../types";
 
 export const aiService = {
-  async executeStep(userMessage: string, step: Step, apiKey: string, modelName: string = "gpt-4o-mini"): Promise<string> {
+  async executeStep(
+      userMessage: string, 
+      step: Step, 
+      apiKey: string, 
+      modelName: string = "gpt-4o-mini",
+      history: Array<{ role: string, content: string }> = []
+    ): Promise<string> {
     const key = apiKey?.trim();
     
     if (!key) {
@@ -14,7 +20,7 @@ export const aiService = {
       apiKey: key,
       modelName: modelName, 
       temperature: 0.7,
-      // @ts-ignore - 'dangerouslyAllowBrowser' is valid in runtime for browser usage but might not be in type definition depending on version
+      // @ts-ignore
       dangerouslyAllowBrowser: true,
       configuration: {
         dangerouslyAllowBrowser: true
@@ -23,10 +29,22 @@ export const aiService = {
 
     const messages = [];
 
+    // 1. System Message (Current Step Context)
     if (step.execution.content) {
         messages.push(new SystemMessage(step.execution.content));
     }
 
+    // 2. Chat History
+    history.forEach(msg => {
+        if (msg.role === 'user') {
+            messages.push(new HumanMessage(msg.content));
+        } else if (msg.role === 'assistant') {
+            messages.push(new AIMessage(msg.content));
+        }
+        // We ignore 'system' messages from the history (e.g. error logs or step transitions)
+    });
+
+    // 3. Current User Message
     messages.push(new HumanMessage(userMessage));
 
     try {
@@ -68,16 +86,19 @@ export const aiService = {
     messages.push(new SystemMessage(systemPrompt));
 
     // User Prompt: The Evaluation Context
+    // We include the original Execution Context so the judge knows what the AI was supposed to do.
     const evalContent = `
-    [CONTEXT]
-    The AI produced the following output:
+    [ORIGINAL INSTRUCTION]
+    ${step.execution.content || "N/A"}
+
+    [CONTEXT - AI RESPONSE TO EVALUATE]
     "${aiResponse}"
 
     [EVALUATION CRITERIA]
     ${userEvalCriteria}
 
     [INSTRUCTION]
-    Evaluate if the output meets the criteria. Be concise.
+    Evaluate if the output meets the criteria given the original instruction. Be concise.
     `;
 
     messages.push(new HumanMessage(evalContent));

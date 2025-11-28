@@ -6,15 +6,26 @@ export interface Scenario {
     id: string;
     name: string;
     created_at: string;
+    generic_execution_prompt?: string;
+    generic_evaluator_prompt?: string;
 }
 
 export const stepService = {
   // Save a new scenario with steps
-  async saveScenario(name: string, steps: Step[]): Promise<string> {
+  async saveScenario(
+      name: string, 
+      steps: Step[], 
+      genericExecutionPrompt?: string, 
+      genericEvaluatorPrompt?: string
+    ): Promise<string> {
       // 1. Create Scenario
       const { data: scenarioData, error: scenarioError } = await supabase
           .from('scenarios')
-          .insert([{ name }])
+          .insert([{ 
+              name,
+              generic_execution_prompt: genericExecutionPrompt,
+              generic_evaluator_prompt: genericEvaluatorPrompt
+          }])
           .select()
           .single();
       
@@ -56,6 +67,17 @@ export const stepService = {
       
       if (error) throw error;
       return data || [];
+  },
+
+  async getScenarioById(id: string): Promise<Scenario | null> {
+      const { data, error } = await supabase
+          .from('scenarios')
+          .select('*')
+          .eq('id', id)
+          .single();
+      
+      if (error) throw error;
+      return data;
   },
 
   // Load steps for a specific scenario

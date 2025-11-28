@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Step } from '../types';
-import { Send, PlayCircle, Bot, User, CheckCircle, XCircle, Gavel, ArrowRight } from 'lucide-react';
+import { Send, PlayCircle, Bot, User, CheckCircle, XCircle, Gavel, ArrowRight, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
 import clsx from 'clsx';
@@ -12,18 +12,21 @@ interface Message {
 
 interface SimulationRunnerProps {
   steps: Step[];
-  onExecute: (message: string, step: Step) => Promise<string>;
+  onExecute: (message: string, step: Step, history: Array<{ role: string, content: string }>) => Promise<string>;
+  genericEvaluatorPrompt?: string;
 }
 
 type SimulationState = 'idle' | 'running_step' | 'waiting_for_eval' | 'running_eval' | 'reviewing_eval';
 
-export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExecute }) => {
+export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExecute, genericEvaluatorPrompt }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [simState, setSimState] = useState<SimulationState>('idle');
   const [lastAiResponse, setLastAiResponse] = useState<string | null>(null);
   const [evalResult, setEvalResult] = useState<string | null>(null);
+  // Store the user's evaluation criteria message to add it to history later
+  const [lastUserEvalCriteria, setLastUserEvalCriteria] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -54,7 +57,12 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
         setMessages(prev => [...prev, { role: 'user', content: userInput }]);
 
         try {
-            const response = await onExecute(userInput, currentStep);
+            // Pass conversation history (filtering out system messages)
+            const history = messages
+                .filter(m => m.role === 'user' || m.role === 'assistant')
+                .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+            const response = await onExecute(userInput, currentStep, history);
             setMessages(prev => [...prev, { role: 'assistant', content: response }]);
             setLastAiResponse(response);
             setSimState('waiting_for_eval'); // Move to Eval state
@@ -68,16 +76,25 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
         if (!lastAiResponse) return; // Should not happen
 
         setSimState('running_eval');
-        // Note: We do NOT add the eval prompt to the chat history as requested
+        setLastUserEvalCriteria(userInput); // Store criteria to add to history later if approved
         
         try {
             const apiKey = getApiKey();
             const model = getModel();
             
+            // Merge Generic Evaluator Prompt with Step Evaluator Prompt if needed
+            const effectiveStep = {
+                ...currentStep,
+                successCondition: {
+                    ...currentStep.successCondition,
+                    content: `${genericEvaluatorPrompt ? `[GLOBAL EVALUATION RULES]\n${genericEvaluatorPrompt}\n\n` : ''}${currentStep.successCondition.content}`
+                }
+            };
+
             const result = await aiService.evaluateResponse(
                 lastAiResponse, 
                 userInput, 
-                currentStep, 
+                effectiveStep, 
                 apiKey, 
                 model
             );
@@ -91,19 +108,48 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
     }
   };
 
-  const handleNextStep = () => {
-      if (!isLastStep) {
-          setCurrentStepIndex(prev => prev + 1);
-          // Reset state for next step
-          setSimState('idle');
+  const handleNextStep = async () => {
+      if (!isLastStep && lastUserEvalCriteria) {
+          const nextIndex = currentStepIndex + 1;
+          const nextStep = steps[nextIndex];
+          const textToSend = lastUserEvalCriteria;
+
+          // 1. Update UI to show we moved and show user message (evaluation message becomes next user message)
+          setCurrentStepIndex(nextIndex);
+          setMessages(prev => [
+              ...prev, 
+              { role: 'system', content: `--- Moving to Step ${nextIndex + 1}: ${nextStep.title} ---` },
+              { role: 'user', content: textToSend }
+          ]);
+          
+          // 2. Clear Eval state
+          setSimState('running_step'); // Go straight to running
           setLastAiResponse(null);
           setEvalResult(null);
+          setLastUserEvalCriteria(null);
           setInput('');
-          setMessages(prev => [...prev, { 
-              role: 'system', 
-              content: `--- Moving to Step ${currentStepIndex + 2}: ${steps[currentStepIndex + 1].title} ---` 
-          }]);
-      } else {
+
+          try {
+              // 3. Execute with NEW step and UPDATED history
+              // Note: 'messages' state won't be updated yet in this closure, so we need to construct history manually
+              const currentHistory = messages
+                   .filter(m => m.role === 'user' || m.role === 'assistant')
+                   .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+              
+              // Add the user message we just "sent" to the history passed to API
+              const updatedHistory = [...currentHistory, { role: 'user', content: textToSend }];
+
+              const response = await onExecute(textToSend, nextStep, updatedHistory);
+              
+              setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+              setLastAiResponse(response);
+              setSimState('waiting_for_eval');
+
+          } catch (error) {
+              setMessages(prev => [...prev, { role: 'system', content: 'Error: ' + String(error) }]);
+              setSimState('idle');
+          }
+      } else if (isLastStep) {
           toast.success("Simulation Completed!");
       }
   };
@@ -111,7 +157,8 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   const handleRetryEval = () => {
       setSimState('waiting_for_eval');
       setEvalResult(null);
-      setInput(''); // Clear input to let user type new criteria
+      setLastUserEvalCriteria(null); // Clear stored criteria to let them type new one
+      setInput(''); 
   };
 
   if (!currentStep) {
@@ -194,44 +241,47 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Evaluation Result Overlay (Only when reviewing) */}
+      {/* Evaluation Result Popup Modal */}
       {simState === 'reviewing_eval' && evalResult && (
-          <div className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border-t border-gray-200 p-6 z-30 animate-in slide-in-from-bottom-10">
-              <div className="max-w-4xl mx-auto">
-                  <div className="flex items-start gap-4 mb-4">
-                      <div className="p-3 bg-purple-100 rounded-full text-purple-600">
-                          <Gavel className="w-6 h-6" />
-                      </div>
-                      <div className="flex-1">
-                          <h3 className="font-bold text-gray-800 text-lg mb-1">Evaluation Result</h3>
-                          <div className="bg-purple-50 border border-purple-100 p-4 rounded-lg text-gray-800 text-sm leading-relaxed max-h-40 overflow-y-auto">
-                              {evalResult}
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
+              <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-200 border border-gray-200">
+                  <div className="flex justify-between items-center mb-4 border-b pb-3">
+                      <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-100 rounded-full text-purple-600">
+                              <Gavel className="w-5 h-5" />
                           </div>
+                          <h3 className="font-bold text-gray-800 text-xl">Evaluation Result</h3>
                       </div>
+                      {/* Close button acting as retry/cancel if they want to manually dismiss, though buttons below are better */}
+                      {/* <button onClick={handleRetryEval} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button> */}
+                  </div>
+
+                  <div className="bg-purple-50 border border-purple-100 p-5 rounded-lg text-gray-800 text-base leading-relaxed mb-6 max-h-[60vh] overflow-y-auto shadow-inner">
+                      {evalResult}
                   </div>
                   
-                  <div className="flex justify-end gap-3 mt-2">
+                  <div className="flex justify-end gap-3 pt-2">
                       <button 
                           onClick={handleRetryEval}
-                          className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors flex items-center gap-2"
+                          className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors flex items-center gap-2 border border-gray-200"
                       >
-                          <XCircle className="w-4 h-4" />
+                          <XCircle className="w-5 h-5" />
                           Retry Evaluation
                       </button>
                       <button 
                           onClick={handleNextStep}
                           disabled={isLastStep}
-                          className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors shadow-sm flex items-center gap-2"
+                          className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold transition-colors shadow-lg flex items-center gap-2 transform hover:scale-105 active:scale-95"
                       >
                           {isLastStep ? 'Finish Simulation' : 'Approve & Next Step'}
-                          <ArrowRight className="w-4 h-4" />
+                          <ArrowRight className="w-5 h-5" />
                       </button>
                   </div>
               </div>
           </div>
       )}
 
-      {/* Input Area (Hidden during review) */}
+      {/* Input Area (Hidden during review - technically underneath the modal now, but kept hidden for cleaner state) */}
       {simState !== 'reviewing_eval' && (
         <div className="p-6 bg-white border-t shadow-lg z-20">
             <div className="w-full">
