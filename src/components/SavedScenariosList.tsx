@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Trash2, FolderOpen, Calendar, ArrowRight, Edit2 } from 'lucide-react';
 import { stepService, type Scenario } from '../services/stepService';
 import { toast } from 'sonner';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface SavedScenariosListProps {
   onLoadScenario: (scenarioId: string, name: string) => void;
@@ -11,6 +12,8 @@ interface SavedScenariosListProps {
 export const SavedScenariosList: React.FC<SavedScenariosListProps> = ({ onLoadScenario, onEditName }) => {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [scenarioToDelete, setScenarioToDelete] = useState<string | null>(null);
 
   const fetchScenarios = async () => {
     try {
@@ -28,17 +31,23 @@ export const SavedScenariosList: React.FC<SavedScenariosListProps> = ({ onLoadSc
     fetchScenarios();
   }, []);
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm('Are you sure you want to delete this scenario? This cannot be undone.')) {
-      try {
-        await stepService.deleteScenario(id);
-        toast.success('Scenario deleted successfully');
-        setScenarios(scenarios.filter(s => s.id !== id));
-      } catch (error) {
-        toast.error('Failed to delete scenario');
-      }
+  const confirmDelete = async () => {
+    if (!scenarioToDelete) return;
+    try {
+      await stepService.deleteScenario(scenarioToDelete);
+      toast.success('Scenario deleted successfully');
+      setScenarios(scenarios.filter(s => s.id !== scenarioToDelete));
+    } catch (error) {
+      toast.error('Failed to delete scenario');
     }
+    setDeleteModalOpen(false);
+    setScenarioToDelete(null);
+  };
+
+  const handleDeleteClick = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setScenarioToDelete(id);
+    setDeleteModalOpen(true);
   };
 
   const handleEditClick = (id: string, name: string, e: React.MouseEvent) => {
@@ -61,49 +70,59 @@ export const SavedScenariosList: React.FC<SavedScenariosListProps> = ({ onLoadSc
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {scenarios.map((scenario) => (
-        <div
-          key={scenario.id}
-          onClick={() => onLoadScenario(scenario.id, scenario.name)}
-          className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group relative"
-        >
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-1.5 bg-blue-50 rounded-md text-blue-600 group-hover:bg-blue-100 transition-colors">
-              <FolderOpen className="w-5 h-5" />
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {scenarios.map((scenario) => (
+          <div
+            key={scenario.id}
+            onClick={() => onLoadScenario(scenario.id, scenario.name)}
+            className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group relative"
+          >
+            <div className="flex justify-between items-start mb-3">
+              <div className="p-1.5 bg-blue-50 rounded-md text-blue-600 group-hover:bg-blue-100 transition-colors">
+                <FolderOpen className="w-5 h-5" />
+              </div>
+              <div className="flex gap-1">
+                  <button 
+                  onClick={(e) => handleEditClick(scenario.id, scenario.name, e)}
+                  className="text-gray-400 hover:text-blue-500 p-1.5 hover:bg-blue-50 rounded-md transition-colors"
+                  title="Rename Scenario"
+                  >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                  onClick={(e) => handleDeleteClick(scenario.id, e)}
+                  className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-md transition-colors"
+                  title="Delete Scenario"
+                  >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+              </div>
             </div>
-            <div className="flex gap-1">
-                <button 
-                onClick={(e) => handleEditClick(scenario.id, scenario.name, e)}
-                className="text-gray-400 hover:text-blue-500 p-1.5 hover:bg-blue-50 rounded-md transition-colors"
-                title="Rename Scenario"
-                >
-                <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button 
-                onClick={(e) => handleDelete(scenario.id, e)}
-                className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-md transition-colors"
-                title="Delete Scenario"
-                >
-                <Trash2 className="w-3.5 h-3.5" />
-                </button>
+
+            <h3 className="text-base font-bold text-gray-800 mb-1 group-hover:text-blue-600 transition-colors truncate" title={scenario.name}>
+              {scenario.name}
+            </h3>
+
+            <div className="flex items-center text-[10px] text-gray-500 mb-3">
+              <Calendar className="w-3 h-3 mr-1" />
+              {new Date(scenario.created_at).toLocaleDateString()}
+            </div>
+
+            <div className="flex items-center text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0 duration-300">
+              Load Scenario <ArrowRight className="w-3 h-3 ml-1" />
             </div>
           </div>
+        ))}
+      </div>
 
-          <h3 className="text-base font-bold text-gray-800 mb-1 group-hover:text-blue-600 transition-colors truncate" title={scenario.name}>
-            {scenario.name}
-          </h3>
-
-          <div className="flex items-center text-[10px] text-gray-500 mb-3">
-            <Calendar className="w-3 h-3 mr-1" />
-            {new Date(scenario.created_at).toLocaleDateString()}
-          </div>
-
-          <div className="flex items-center text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0 duration-300">
-            Load Scenario <ArrowRight className="w-3 h-3 ml-1" />
-          </div>
-        </div>
-      ))}
-    </div>
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Scenario"
+        description="Are you sure you want to delete this scenario? This action cannot be undone."
+      />
+    </>
   );
 };
