@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Step, PromptConfig } from '../types';
-import { MessageSquare, CheckCircle, Play, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, Play, User, ChevronDown, ChevronUp } from 'lucide-react';
 import clsx from 'clsx';
 
 interface StepEditorProps {

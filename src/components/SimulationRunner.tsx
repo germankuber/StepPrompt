@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Step } from '../types';
-import { Send, PlayCircle, Bot, User, CheckCircle, XCircle, Gavel, ArrowRight, X, RotateCcw } from 'lucide-react';
+import { Send, PlayCircle, Bot, User, CheckCircle, XCircle, Gavel, ArrowRight, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
 import clsx from 'clsx';
