@@ -18,10 +18,8 @@ export interface DbStep {
   title: string;
   execution_prompt: string;
   execution_inject_user: boolean;
-  // validation_prompt: string; // REMOVED
-  // validation_inject_user: boolean; // REMOVED
-  success_prompt: string;
-  success_inject_user: boolean;
+  evaluator_prompt: string;
+  evaluator_inject_user: boolean;
   order_index: number;
   created_at?: string;
 }
