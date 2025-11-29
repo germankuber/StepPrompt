@@ -32,11 +32,14 @@ export const stepService = {
       if (scenarioError) throw scenarioError;
       const scenarioId = scenarioData.id;
 
-      // 2. Prepare steps with scenario_id
-      const dbSteps = steps.map(step => ({
-          ...mapStepToDb(step),
-          scenario_id: scenarioId
-      }));
+      // 2. Prepare steps with scenario_id and remove ID to ensure new records are created
+      const dbSteps = steps.map(step => {
+          const { id, ...stepData } = mapStepToDb(step);
+          return {
+              ...stepData,
+              scenario_id: scenarioId
+          };
+      });
 
       // 3. Insert Steps
       const { error: stepsError } = await supabase
@@ -149,8 +152,8 @@ const mapDbToStep = (db: DbStep): Step => ({
     injectUserMessage: db.execution_inject_user || false,
   },
   successCondition: {
-    content: db.evaluator_prompt || '',
-    injectUserMessage: db.evaluator_inject_user || false,
+    content: db.success_prompt || '',
+    injectUserMessage: db.success_inject_user || false,
   },
 });
 
@@ -160,6 +163,6 @@ const mapStepToDb = (step: Step): DbStep & { scenario_id?: string } => ({
   order_index: step.order_index,
   execution_prompt: step.execution.content,
   execution_inject_user: step.execution.injectUserMessage,
-  evaluator_prompt: step.successCondition.content,
-  evaluator_inject_user: step.successCondition.injectUserMessage,
+  success_prompt: step.successCondition.content,
+  success_inject_user: step.successCondition.injectUserMessage,
 });
