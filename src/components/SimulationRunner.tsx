@@ -1,9 +1,49 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Step } from '../types';
-import { Send, PlayCircle, Bot, User, Gavel, RotateCcw, Info } from 'lucide-react';
+import { Send, PlayCircle, Bot, User, Gavel, RotateCcw, Info, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
 import { ResetConfirmationModal } from './ResetConfirmationModal';
+
+// TypeScript types for Speech Recognition API
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+  onend: () => void;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -17,11 +57,12 @@ interface SimulationRunnerProps {
   onExecute: (message: string, step: Step, history: Array<{ role: string, content: string }>) => Promise<string>;
   genericEvaluatorPrompt?: string;
   genericFailPrompt?: string;
+  isPublic?: boolean;
 }
 
 type SimulationState = 'idle' | 'running_step' | 'waiting_for_eval' | 'running_eval' | 'reviewing_eval';
 
-export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExecute, genericEvaluatorPrompt, genericFailPrompt }) => {
+export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExecute, genericEvaluatorPrompt, genericFailPrompt, isPublic = false }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -31,6 +72,13 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   // Store the user's evaluation criteria message to add it to history later
   const [lastUserEvalCriteria, setLastUserEvalCriteria] = useState<string | null>(null);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  
+  // Voice mode state
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const finalTranscriptRef = useRef<string>('');
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -53,10 +101,103 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
     scrollToBottom();
   }, [messages, evalResult, simState]);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if (isPublic && isVoiceMode) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'es-ES'; // Spanish, can be changed to 'en-US' for English
 
-    const userInput = input;
+        recognition.onresult = (event: SpeechRecognitionEvent) => {
+          let interimTranscript = '';
+          let newFinalTranscript = '';
+
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            const transcript = result[0].transcript;
+            if (result.isFinal) {
+              newFinalTranscript += transcript + ' ';
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+
+          // Update final transcript ref (accumulated final results)
+          if (newFinalTranscript) {
+            finalTranscriptRef.current += newFinalTranscript;
+          }
+          
+          // Update display transcript (final + interim for live preview)
+          setTranscript(finalTranscriptRef.current + interimTranscript);
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          if (event.error === 'no-speech') {
+            // This is normal when user stops talking
+            return;
+          }
+          toast.error('Error en reconocimiento de voz: ' + event.error);
+          setIsRecording(false);
+        };
+
+        recognition.onend = () => {
+          setIsRecording(false);
+        };
+
+        recognitionRef.current = recognition;
+      } else {
+        toast.error('Tu navegador no soporta reconocimiento de voz');
+        setIsVoiceMode(false);
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [isPublic, isVoiceMode]);
+
+  const startRecording = () => {
+    if (recognitionRef.current && !isRecording && simState !== 'running_step' && simState !== 'running_eval') {
+      setIsRecording(true);
+      setTranscript('');
+      finalTranscriptRef.current = '';
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error('Error starting recognition:', error);
+        setIsRecording(false);
+      }
+    }
+  };
+
+  const stopRecording = async () => {
+    if (recognitionRef.current && isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+      
+      // Wait a bit for final transcript, then send
+      setTimeout(() => {
+        const textToSend = finalTranscriptRef.current.trim() || transcript.trim();
+        if (textToSend && simState !== 'running_step' && simState !== 'running_eval') {
+          handleSend(textToSend);
+        }
+        setTranscript('');
+        finalTranscriptRef.current = '';
+      }, 500);
+    }
+  };
+
+  const handleSend = async (textToSend?: string) => {
+    const messageToSend = textToSend || input;
+    if (!messageToSend.trim()) return;
+
+    const userInput = messageToSend;
     setInput('');
 
     // FLOW 1: Execute Step
@@ -452,28 +593,88 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       {simState !== 'reviewing_eval' && (
         <div className="p-6 bg-white border-t shadow-lg z-20">
             <div className="w-full">
-                <div className="flex gap-4">
-                    <input
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && input.trim() && simState !== 'running_step' && simState !== 'running_eval') {
-                            handleSend();
-                          }
-                        }}
-                        placeholder="Type your message here..."
-                        className="flex-1 border border-gray-300 rounded-xl px-6 py-4 text-lg outline-none shadow-sm transition-all focus:ring-2 focus:ring-blue-500"
-                        autoFocus
-                    />
-                    <button 
-                        onClick={handleSend}
-                        disabled={!input.trim() || simState === 'running_step' || simState === 'running_eval'}
-                        className="text-white p-4 rounded-xl transition-colors shadow-md flex-shrink-0 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Send className="w-6 h-6" />
-                    </button>
+              {/* Voice Mode Toggle (only in public mode) */}
+              {isPublic && (
+                <div className="flex items-center justify-center mb-4">
+                  <button
+                    onClick={() => setIsVoiceMode(!isVoiceMode)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      isVoiceMode 
+                        ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {isVoiceMode ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    <span className="text-sm font-medium">
+                      {isVoiceMode ? 'Modo Voz Activado' : 'Activar Modo Voz'}
+                    </span>
+                  </button>
                 </div>
+              )}
+
+              {/* Voice Mode UI */}
+              {isPublic && isVoiceMode ? (
+                <div className="flex flex-col items-center gap-4">
+                  {/* Transcript Display */}
+                  {transcript && (
+                    <div className="w-full bg-purple-50 border border-purple-200 rounded-xl px-6 py-4 text-lg text-gray-800 min-h-[60px] flex items-center">
+                      {transcript}
+                    </div>
+                  )}
+                  
+                  {/* Record Button */}
+                  <button
+                    onMouseDown={startRecording}
+                    onMouseUp={stopRecording}
+                    onMouseLeave={stopRecording}
+                    onTouchStart={startRecording}
+                    onTouchEnd={stopRecording}
+                    disabled={simState === 'running_step' || simState === 'running_eval'}
+                    className={`w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-lg ${
+                      isRecording
+                        ? 'bg-red-500 hover:bg-red-600 scale-110 animate-pulse'
+                        : 'bg-purple-600 hover:bg-purple-700 hover:scale-105'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    title="Mantén presionado para grabar"
+                  >
+                    {isRecording ? (
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                        <Mic className="w-6 h-6 text-red-500" />
+                      </div>
+                    ) : (
+                      <Mic className="w-10 h-10 text-white" />
+                    )}
+                  </button>
+                  
+                  <p className="text-sm text-gray-500 text-center">
+                    {isRecording ? 'Grabando... Suelta para enviar' : 'Mantén presionado para hablar'}
+                  </p>
+                </div>
+              ) : (
+                /* Text Input Mode */
+                <div className="flex gap-4">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && input.trim() && simState !== 'running_step' && simState !== 'running_eval') {
+                        handleSend();
+                      }
+                    }}
+                    placeholder="Type your message here..."
+                    className="flex-1 border border-gray-300 rounded-xl px-6 py-4 text-lg outline-none shadow-sm transition-all focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                  <button 
+                    onClick={handleSend}
+                    disabled={!input.trim() || simState === 'running_step' || simState === 'running_eval'}
+                    className="text-white p-4 rounded-xl transition-colors shadow-md flex-shrink-0 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Send className="w-6 h-6" />
+                  </button>
+                </div>
+              )}
             </div>
         </div>
       )}

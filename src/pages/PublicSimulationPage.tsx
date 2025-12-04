@@ -92,6 +92,7 @@ export const PublicSimulationPage: React.FC = () => {
         onExecute={handleExecuteStep}
         genericEvaluatorPrompt={genericEvaluatorPrompt}
         genericFailPrompt={genericFailPrompt}
+        isPublic={true}
       />
     </div>
   );
