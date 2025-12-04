@@ -137,47 +137,9 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 setEvalResult(result); // Store it just in case, though we are auto-advancing
                 await executeFailSequence(userInput);
             } else {
-                setEvalResult(result);
-                // Remove the speculative user message if we are going to reviewing_eval
-                // Actually, if we are in reviewing_eval (popup), we might want to keep it or hide it?
-                // The current flow: 
-                // 1. User sends message -> shown in chat
-                // 2. Evaluator runs
-                // 3. If PASS -> Show popup. The user message is behind the popup.
-                //    When OK is clicked -> handleNextStep is called.
-                //    handleNextStep adds the message AGAIN to history as the "next step" trigger? 
-                //    Wait, handleNextStep uses lastUserEvalCriteria as content.
-                
-                // If we show it now, we shouldn't add it again later.
-                // Let's remove it from messages state if it's NOT a fail, to match previous behavior where it appears only after transition?
-                // OR better: Keep it, and handleNextStep should NOT add it again if it's already there?
-                // The previous logic was: handleNextStep adds it.
-                
-                // Let's remove it for now if NOT fail, to keep consistent with "popup -> next step" flow where it appears as part of next step.
-                // But user wants to see it immediately.
-                
-                // If we keep it here:
-                // handleNextStep will take `lastUserEvalCriteria` and put it as `user` message for next step.
-                // This means we'd have duplicate messages if we don't be careful.
-                
-                // Correct approach for PASS:
-                // The message is "Evaluation Criteria". 
-                // If PASS, this criteria becomes the "User Message" for the NEXT step.
-                // So visually it belongs to the NEXT step block.
-                
-                // If FAIL, it belongs to CURRENT step block as a "critique".
-                
-                // If we show it now, it appears in CURRENT step block.
-                // If PASS, we might want to "move" it to next step or just accept it's here.
-                
-                // Let's revert the addition if it's NOT a fail (i.e. we are showing popup).
-                // This is a bit hacky but ensures consistency with "next step" logic.
-                // BUT user said "when I send it must appear immediately".
-                
-                // So we MUST keep it. 
-                // We need to adjust handleNextStep to NOT add it again, or recognize it's already there.
-                
-                setSimState('reviewing_eval');
+                setEvalResult(null); // Clear result since we are auto-advancing
+                // Auto-advance to next step
+                await handleNextStep(userInput);
             }
         } catch (error) {
             toast.error("Evaluation failed: " + String(error));
@@ -227,11 +189,14 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       }
   };
 
-  const handleNextStep = async () => {
-      if (!isLastStep && lastUserEvalCriteria) {
+  const handleNextStep = async (userCriteria?: string) => {
+      // Use override criteria (from immediate call) or fallback to state
+      const criteria = userCriteria || lastUserEvalCriteria;
+      
+      if (!isLastStep && criteria) {
           const nextIndex = currentStepIndex + 1;
           const nextStep = sortedSteps[nextIndex];
-          const textToSend = lastUserEvalCriteria;
+          const textToSend = criteria;
 
           // 1. Update UI to show we moved
           setCurrentStepIndex(nextIndex);
