@@ -41,19 +41,26 @@ const PromptSection = ({
         />
       </div>
       
-      <div className="flex items-center gap-2">
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-            checked={config.injectUserMessage}
-            onChange={(e) => onUpdate(type, 'injectUserMessage', e.target.checked)}
-          />
-          <span className={clsx("text-xs", config.injectUserMessage ? "text-blue-700 font-medium" : "text-gray-500")}>
-            Inject User Message
-          </span>
-        </label>
-        {config.injectUserMessage && <User className="w-3.5 h-3.5 text-blue-500" />}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+              checked={config.injectUserMessage}
+              onChange={(e) => onUpdate(type, 'injectUserMessage', e.target.checked)}
+            />
+            <span className={clsx("text-xs", config.injectUserMessage ? "text-blue-700 font-medium" : "text-gray-500")}>
+              Inject User Message
+            </span>
+          </label>
+          {config.injectUserMessage && <User className="w-3.5 h-3.5 text-blue-500" />}
+        </div>
+        {config.injectUserMessage && (
+          <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+            💡 Use <code className="font-mono bg-white px-1 rounded">{'{{UserMessage}}'}</code> in your prompt to inject the user's message
+          </div>
+        )}
       </div>
     </div>
   </div>

@@ -29,6 +29,8 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   const [evalResult, setEvalResult] = useState<string | null>(null);
   // Store the user's evaluation criteria message to add it to history later
   const [lastUserEvalCriteria, setLastUserEvalCriteria] = useState<string | null>(null);
+  // Store the original user message that triggered the step execution
+  const [lastUserMessage, setLastUserMessage] = useState<string | null>(null);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
             const stepLabel = `Step ${currentStepIndex + 1}`;
             setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: stepLabel }]);
             setLastAiResponse(response);
+            setLastUserMessage(userInput); // Store the original user message for evaluation
             setSimState('waiting_for_eval'); // Move to Eval state
         } catch (error) {
             const stepLabel = `Step ${currentStepIndex + 1}`;
@@ -107,7 +110,8 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 userInput, 
                 effectiveStep, 
                 apiKey, 
-                model
+                model,
+                lastUserMessage || '' // Pass the original user message for {{UserMessage}} replacement
             );
             
             setEvalResult(result);
@@ -142,6 +146,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
           setLastAiResponse(null);
           setEvalResult(null);
           setLastUserEvalCriteria(null);
+          setLastUserMessage(textToSend); // Store the new user message for evaluation
           setInput('');
 
           try {
@@ -159,6 +164,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
               
               setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: nextStepLabel }]);
               setLastAiResponse(response);
+              setLastUserMessage(textToSend); // Ensure we have the user message stored
               setSimState('waiting_for_eval');
 
           } catch (error) {
@@ -186,6 +192,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       setLastAiResponse(null);
       setEvalResult(null);
       setLastUserEvalCriteria(null);
+      setLastUserMessage(null);
       toast.info("Simulation restarted");
   };
 

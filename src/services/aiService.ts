@@ -31,7 +31,12 @@ export const aiService = {
 
     // 1. System Message (Current Step Context)
     if (step.execution.content) {
-        messages.push(new SystemMessage(step.execution.content));
+        let executionContent = step.execution.content;
+        // Replace {{UserMessage}} placeholder with actual user message if injectUserMessage is enabled
+        if (step.execution.injectUserMessage) {
+            executionContent = executionContent.replace(/\{\{UserMessage\}\}/g, userMessage);
+        }
+        messages.push(new SystemMessage(executionContent));
     }
 
     // 2. Chat History
@@ -61,7 +66,8 @@ export const aiService = {
       userEvalCriteria: string, 
       step: Step, 
       apiKey: string, 
-      modelName: string = "gpt-4o-mini"
+      modelName: string = "gpt-4o-mini",
+      originalUserMessage: string = ''
   ): Promise<string> {
     const key = apiKey?.trim();
     if (!key) throw new Error("Missing API Key");
@@ -79,9 +85,14 @@ export const aiService = {
 
     // System Prompt: The Success Condition defined in the Step
     // If no success condition is defined, we provide a default judge persona
-    const systemPrompt = step.successCondition.content 
+    let systemPrompt = step.successCondition.content 
         ? step.successCondition.content 
         : "You are an impartial judge evaluating an AI's response based on specific criteria.";
+    
+    // Replace {{UserMessage}} placeholder with actual user message if injectUserMessage is enabled
+    if (step.successCondition.injectUserMessage && originalUserMessage) {
+        systemPrompt = systemPrompt.replace(/\{\{UserMessage\}\}/g, originalUserMessage);
+    }
     
     messages.push(new SystemMessage(systemPrompt));
 
