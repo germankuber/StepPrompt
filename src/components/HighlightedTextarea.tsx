@@ -43,11 +43,16 @@ export const HighlightedTextarea: React.FC<HighlightedTextareaProps> = ({
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br>');
     
-    // Replace {{UserMessage}} with highlighted version
-    // Using inline styles with !important to ensure visibility
-    const highlighted = escaped.replace(
+    // Replace {{UserMessage}} with highlighted version (Yellow)
+    let highlighted = escaped.replace(
       /\{\{UserMessage\}\}/g,
       '<span style="background-color: #fef08a !important; color: #854d0e !important; font-weight: 600 !important; padding: 1px 3px !important; border-radius: 3px !important; display: inline-block;">{{UserMessage}}</span>'
+    );
+    
+    // Replace {{CharacterMessage}} with highlighted version (Green)
+    highlighted = highlighted.replace(
+      /\{\{CharacterMessage\}\}/g,
+      '<span style="background-color: #bbf7d0 !important; color: #166534 !important; font-weight: 600 !important; padding: 1px 3px !important; border-radius: 3px !important; display: inline-block;">{{CharacterMessage}}</span>'
     );
     
     return highlighted;

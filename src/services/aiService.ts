@@ -67,7 +67,8 @@ export const aiService = {
       step: Step, 
       apiKey: string, 
       modelName: string = "gpt-4o-mini",
-      originalUserMessage: string = ''
+      originalUserMessage: string = '',
+      genericEvaluatorPrompt: string = ''
   ): Promise<string> {
     const key = apiKey?.trim();
     if (!key) throw new Error("Missing API Key");
@@ -83,34 +84,37 @@ export const aiService = {
 
     const messages = [];
 
-    // System Prompt: The Success Condition defined in the Step
-    // If no success condition is defined, we provide a default judge persona
-    let systemPrompt = step.successCondition.content 
-        ? step.successCondition.content 
-        : "You are an impartial judge evaluating an AI's response based on specific criteria.";
-    
-    // Replace {{UserMessage}} placeholder with actual user message if injectUserMessage is enabled
-    if (step.successCondition.injectUserMessage && originalUserMessage) {
-        systemPrompt = systemPrompt.replace(/\{\{UserMessage\}\}/g, originalUserMessage);
-    }
-    
+    // System Prompt: Generic Evaluator Prompt (Global Rules)
+    const systemPrompt = genericEvaluatorPrompt || "You are an impartial judge evaluating an AI's response based on specific criteria.";
     messages.push(new SystemMessage(systemPrompt));
 
-    // User Prompt: The Evaluation Context
-    // We include the original Execution Context so the judge knows what the AI was supposed to do.
-    const evalContent = `
-    [ORIGINAL INSTRUCTION]
-    ${step.execution.content || "N/A"}
-
-    [CONTEXT - AI RESPONSE TO EVALUATE]
-    "${aiResponse}"
-
-    [EVALUATION CRITERIA]
-    ${userEvalCriteria}
-
-    [INSTRUCTION]
-    Evaluate if the output meets the criteria given the original instruction. Be concise.
-    `;
+    // User Prompt: The Step's Success Condition (Evaluator Prompt)
+    let evalContent = step.successCondition.content || "";
+    
+    // Replace placeholders in the step's evaluator prompt
+    // 1. {{UserMessage}} -> The original user message that triggered the AI response
+    if (originalUserMessage) {
+        evalContent = evalContent.replace(/\{\{UserMessage\}\}/g, originalUserMessage);
+    }
+    
+    // 2. {{CharacterMessage}} -> The AI response being evaluated
+    if (aiResponse) {
+        evalContent = evalContent.replace(/\{\{CharacterMessage\}\}/g, aiResponse);
+    }
+    
+    // Append the user's manual evaluation criteria/input if provided (though the prompt implies it might be self-contained)
+    // The previous logic wrapped everything in a structured block. Now we just append userEvalCriteria?
+    // User instruction: "como user menssages debes enviar el evalutor prompt de ese step y remplazar el {{CharacterMessage}} y {{UserMessage}}"
+    // It doesn't explicitly say what to do with 'userEvalCriteria' (the input from the text box).
+    // Usually 'userEvalCriteria' IS the additional context or critique the user provides.
+    // If the step's evaluator prompt expects to check against the user's critique, it might not be needed?
+    // However, usually the user input IS the critique.
+    // Let's assume we should append it or include it.
+    // Given the previous structure used it as [EVALUATION CRITERIA], let's append it clearly.
+    
+    if (userEvalCriteria) {
+        evalContent += `\n\n[USER CRITIQUE/INPUT]\n${userEvalCriteria}`;
+    }
 
     messages.push(new HumanMessage(evalContent));
 

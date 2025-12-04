@@ -106,7 +106,8 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 ...currentStep,
                 successCondition: {
                     ...currentStep.successCondition,
-                    content: `${genericEvaluatorPrompt ? `[GLOBAL EVALUATION RULES]\n${genericEvaluatorPrompt}\n\n` : ''}${currentStep.successCondition.content}`
+                    // We don't need to prepend generic prompt here anymore as it's handled in aiService
+                    content: currentStep.successCondition.content
                 }
             };
 
@@ -116,7 +117,8 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 effectiveStep, 
                 apiKey, 
                 model,
-                lastUserMessage || '' // Pass the original user message for {{UserMessage}} replacement
+                lastUserMessage || '', // Pass the original user message for {{UserMessage}} replacement
+                genericEvaluatorPrompt // Pass generic prompt explicitly
             );
             
             // Parse the result to check for FAIL
