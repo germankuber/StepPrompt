@@ -9,6 +9,7 @@ export interface Step {
   execution: PromptConfig;
   successCondition: PromptConfig; // Renamed to Evaluator Prompt in UI, but keeping key for compatibility or renaming it?
   failCondition: PromptConfig; // Fail Prompt for handling failures
+  information?: string; // Information to display after the AI responds
   // validation: PromptConfig; // REMOVED
   order_index: number;
 }
@@ -22,6 +23,7 @@ export function normalizeStep(step: Partial<Step> & { id: string; title: string;
     execution: step.execution || { content: '', injectUserMessage: false },
     successCondition: step.successCondition || { content: '', injectUserMessage: false },
     failCondition: step.failCondition || { content: '', injectUserMessage: false },
+    information: step.information || '',
   };
 }
 
@@ -35,6 +37,7 @@ export interface DbStep {
   success_inject_user: boolean;
   fail_prompt: string;
   fail_inject_user: boolean;
+  information?: string;
   order_index: number;
   created_at?: string;
 }

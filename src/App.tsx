@@ -279,6 +279,7 @@ const AppRoutes = (props: any) => {
               steps={steps}
               onExecute={handleExecuteStep}
               genericEvaluatorPrompt={genericEvaluatorPrompt}
+              genericFailPrompt={genericFailPrompt}
             />
           } />
           <Route path="scenarios" element={

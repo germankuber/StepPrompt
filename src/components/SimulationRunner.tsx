@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Step } from '../types';
-import { Send, PlayCircle, Bot, User, XCircle, Gavel, ArrowRight, RotateCcw } from 'lucide-react';
+import { Send, PlayCircle, Bot, User, XCircle, Gavel, ArrowRight, RotateCcw, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
 import { ResetConfirmationModal } from './ResetConfirmationModal';
@@ -9,17 +9,19 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   stepTitle?: string;
+  stepIndex?: number; // Store the step index to show correct information
 }
 
 interface SimulationRunnerProps {
   steps: Step[];
   onExecute: (message: string, step: Step, history: Array<{ role: string, content: string }>) => Promise<string>;
   genericEvaluatorPrompt?: string;
+  genericFailPrompt?: string;
 }
 
 type SimulationState = 'idle' | 'running_step' | 'waiting_for_eval' | 'running_eval' | 'reviewing_eval';
 
-export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExecute, genericEvaluatorPrompt }) => {
+export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExecute, genericEvaluatorPrompt, genericFailPrompt }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -74,7 +76,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
 
             const response = await onExecute(userInput, currentStep, history);
             const stepLabel = `Step ${currentStepIndex + 1}`;
-            setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: stepLabel }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: stepLabel, stepIndex: currentStepIndex }]);
             setLastAiResponse(response);
             setLastUserMessage(userInput); // Store the original user message for evaluation
             setSimState('waiting_for_eval'); // Move to Eval state
@@ -161,7 +163,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
               const response = await onExecute(textToSend, nextStep, updatedHistory);
               const nextStepLabel = `Step ${nextIndex + 1}`;
               
-              setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: nextStepLabel }]);
+              setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: nextStepLabel, stepIndex: nextIndex }]);
               setLastAiResponse(response);
               setLastUserMessage(textToSend); // Ensure we have the user message stored
               setSimState('waiting_for_eval');
@@ -181,6 +183,76 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       setEvalResult(null);
       setLastUserEvalCriteria(null); // Clear stored criteria to let them type new one
       setInput(''); 
+  };
+
+  const handleOk = async () => {
+      if (!lastUserMessage) {
+          // If we don't have the user message, just proceed to next step
+          handleNextStep();
+          return;
+      }
+
+      // Save the evaluation criteria before clearing it
+      const savedEvalCriteria = lastUserEvalCriteria;
+      
+      setSimState('running_step');
+      
+      try {
+          const apiKey = getApiKey();
+          const model = getModel();
+          
+          // Create a chat with the generic fail prompt as system message
+          const { ChatOpenAI } = await import("@langchain/openai");
+          const { SystemMessage, HumanMessage } = await import("@langchain/core/messages");
+          
+          const chat = new ChatOpenAI({
+              apiKey: apiKey,
+              modelName: model,
+              temperature: 0.7,
+              // @ts-ignore
+              dangerouslyAllowBrowser: true,
+              configuration: { dangerouslyAllowBrowser: true }
+          });
+
+          const messages = [];
+          
+          // 1. System Message: Generic Fail Prompt
+          if (genericFailPrompt && genericFailPrompt.trim() !== '') {
+              messages.push(new SystemMessage(genericFailPrompt));
+          }
+          
+          // 2. User Message: Fail Prompt of current step with {{UserMessage}} replaced
+          let failPromptContent = currentStep.failCondition?.content || '';
+          if (failPromptContent && failPromptContent.includes('{{UserMessage}}')) {
+              failPromptContent = failPromptContent.replace(/\{\{UserMessage\}\}/g, lastUserMessage);
+          }
+          
+          if (failPromptContent.trim() !== '') {
+              messages.push(new HumanMessage(failPromptContent));
+          }
+
+          const response = await chat.invoke(messages);
+          const responseContent = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+          
+          // Add the response to messages
+          const stepLabel = `Step ${currentStepIndex + 1}`;
+          setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: responseContent, 
+              stepTitle: stepLabel,
+              stepIndex: currentStepIndex 
+          }]);
+          
+          // Clear evaluation state but restore the criteria for handleNextStep
+          setEvalResult(null);
+          setLastUserEvalCriteria(savedEvalCriteria);
+          
+          // Then proceed to next step
+          handleNextStep();
+      } catch (error) {
+          toast.error("Error processing fail prompt: " + String(error));
+          setSimState('reviewing_eval');
+      }
   };
 
   const handleReset = () => {
@@ -234,6 +306,25 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       <div className="bg-blue-50/50 p-3 border-b text-sm text-gray-600 px-6 truncate flex-shrink-0">
         <span className="font-bold text-blue-700">Context:</span> {currentStep.execution.content.substring(0, 150)}...
       </div>
+
+      {/* Information Alert - Top of Chat - Only show after AI responds for this step */}
+      {currentStep?.information && currentStep.information.trim() !== '' && 
+       messages.some(msg => msg.role === 'assistant' && msg.stepIndex === currentStepIndex) && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mx-6 mt-4 rounded-lg shadow-sm flex-shrink-0">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-semibold text-yellow-800">Information</h3>
+                <span className="text-orange-600 font-bold">!</span>
+              </div>
+              <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                {currentStep.information}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50 pb-32">
@@ -290,44 +381,62 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       </div>
 
       {/* Evaluation Result Popup Modal */}
-      {simState === 'reviewing_eval' && evalResult && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
-              <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-200 border border-gray-200">
-                  <div className="flex justify-between items-center mb-4 border-b pb-3">
-                      <div className="flex items-center gap-3">
-                          <div className="p-2 bg-purple-100 rounded-full text-purple-600">
-                              <Gavel className="w-5 h-5" />
-                          </div>
-                          <h3 className="font-bold text-gray-800 text-xl">Evaluation Result</h3>
-                      </div>
-                      {/* Close button acting as retry/cancel if they want to manually dismiss, though buttons below are better */}
-                      {/* <button onClick={handleRetryEval} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button> */}
-                  </div>
+      {simState === 'reviewing_eval' && evalResult && (() => {
+          // Try to parse JSON from evalResult
+          let parsedResult: { result?: string; reasons?: string[] } | null = null;
+          try {
+              // Try to extract JSON from the result (it might be wrapped in text)
+              const jsonMatch = evalResult.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                  parsedResult = JSON.parse(jsonMatch[0]);
+              }
+          } catch (e) {
+              // If parsing fails, keep parsedResult as null
+          }
 
-                  <div className="bg-purple-50 border border-purple-100 p-5 rounded-lg text-gray-800 text-base leading-relaxed mb-6 max-h-[60vh] overflow-y-auto shadow-inner">
-                      {evalResult}
-                  </div>
+          const isFail = parsedResult?.result === 'FAIL' && parsedResult?.reasons && parsedResult.reasons.length > 0;
+
+          return (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
+                  <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-200 border border-gray-200">
+                      <div className="flex justify-between items-center mb-4 border-b pb-3">
+                          <div className="flex items-center gap-3">
+                              <div className="p-2 bg-purple-100 rounded-full text-purple-600">
+                                  <Gavel className="w-5 h-5" />
+                              </div>
+                              <h3 className="font-bold text-gray-800 text-xl">Evaluation Result</h3>
+                          </div>
+                          {/* Close button acting as retry/cancel if they want to manually dismiss, though buttons below are better */}
+                          {/* <button onClick={handleRetryEval} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button> */}
+                      </div>
+
+                      <div className="bg-purple-50 border border-purple-100 p-5 rounded-lg text-gray-800 text-base leading-relaxed mb-6 max-h-[60vh] overflow-y-auto shadow-inner">
+                          {isFail ? (
+                              <div>
+                                  <div className="font-semibold text-red-700 mb-3">FAIL</div>
+                                  <ul className="list-disc list-inside space-y-2">
+                                      {parsedResult!.reasons!.map((reason, idx) => (
+                                          <li key={idx} className="text-gray-700">{reason}</li>
+                                      ))}
+                                  </ul>
+                              </div>
+                          ) : (
+                              <div className="whitespace-pre-wrap">{evalResult}</div>
+                          )}
+                      </div>
                   
-                  <div className="flex justify-end gap-3 pt-2">
-                      <button 
-                          onClick={handleRetryEval}
-                          className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors flex items-center gap-2 border border-gray-200"
-                      >
-                          <XCircle className="w-5 h-5" />
-                          Retry Evaluation
-                      </button>
-                      <button 
-                          onClick={handleNextStep}
-                          disabled={isLastStep}
-                          className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold transition-colors shadow-lg flex items-center gap-2 transform hover:scale-105 active:scale-95"
-                      >
-                          {isLastStep ? 'Finish Simulation' : 'Approve & Next Step'}
-                          <ArrowRight className="w-5 h-5" />
-                      </button>
+                      <div className="flex justify-end gap-3 pt-2">
+                          <button 
+                              onClick={handleOk}
+                              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-lg flex items-center gap-2 transform hover:scale-105 active:scale-95"
+                          >
+                              OK
+                          </button>
+                      </div>
                   </div>
               </div>
-          </div>
-      )}
+          );
+      })()}
 
       {/* Input Area (Hidden during review - technically underneath the modal now, but kept hidden for cleaner state) */}
       {simState !== 'reviewing_eval' && (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Step, PromptConfig } from '../types';
 import { normalizeStep } from '../types';
-import { CheckCircle, Play, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { CheckCircle, Play, ChevronDown, ChevronUp, AlertTriangle, Info } from 'lucide-react';
 import { HighlightedTextarea } from './HighlightedTextarea';
 import clsx from 'clsx';
 
@@ -129,7 +129,7 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
       {/* Collapsible Content */}
       {isExpanded && (
         <div className="p-4 animate-in slide-in-from-top-2 duration-200">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                 <PromptSection 
                 title="Execution Context" 
                 icon={Play} 
@@ -150,6 +150,22 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
                 config={normalizedStep.failCondition} 
                 type="failCondition" 
                 onUpdate={updatePrompt}
+                />
+            </div>
+            
+            {/* Information Field */}
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 mb-2">
+                    <Info className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-semibold text-gray-700 text-sm">Information</h3>
+                    <span className="text-orange-600 font-bold text-lg">!</span>
+                </div>
+                <textarea
+                    value={normalizedStep.information || ''}
+                    onChange={(e) => onUpdate({...normalizedStep, information: e.target.value})}
+                    placeholder="Information to display after the AI responds..."
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-xs bg-white"
+                    rows={4}
                 />
             </div>
         </div>

@@ -6,12 +6,14 @@ interface SimulationPageProps {
   steps: Step[];
   onExecute: (message: string, step: Step, history: Array<{ role: string, content: string }>) => Promise<string>;
   genericEvaluatorPrompt: string;
+  genericFailPrompt: string;
 }
 
 export const SimulationPage: React.FC<SimulationPageProps> = ({
   steps,
   onExecute,
-  genericEvaluatorPrompt
+  genericEvaluatorPrompt,
+  genericFailPrompt
 }) => {
   return (
     <div className="h-full">
@@ -19,6 +21,7 @@ export const SimulationPage: React.FC<SimulationPageProps> = ({
             steps={steps} 
             onExecute={onExecute}
             genericEvaluatorPrompt={genericEvaluatorPrompt}
+            genericFailPrompt={genericFailPrompt}
         />
     </div>
   );

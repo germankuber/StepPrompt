@@ -43,6 +43,7 @@ export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
       execution: { content: '', injectUserMessage: false },
       successCondition: { content: '', injectUserMessage: false },
       failCondition: { content: '', injectUserMessage: false },
+      information: '',
     };
     setSteps([...steps, newStep]);
   };
