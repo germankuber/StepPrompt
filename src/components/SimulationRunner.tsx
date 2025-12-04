@@ -115,13 +115,68 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 lastUserMessage || '' // Pass the original user message for {{UserMessage}} replacement
             );
             
-            setEvalResult(result);
-            setSimState('reviewing_eval');
+            // Parse the result to check for FAIL
+            let isFail = false;
+            try {
+                const jsonMatch = result.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    const parsed = JSON.parse(jsonMatch[0]);
+                    isFail = parsed.result === 'FAIL';
+                }
+            } catch (e) {
+                // If parsing fails, assume not fail
+            }
+
+            if (isFail) {
+                setEvalResult(result); // Store it just in case, though we are auto-advancing
+                await executeFailSequence();
+            } else {
+                setEvalResult(result);
+                setSimState('reviewing_eval');
+            }
         } catch (error) {
             toast.error("Evaluation failed: " + String(error));
             setSimState('waiting_for_eval');
         }
     }
+  };
+
+  const executeFailSequence = async () => {
+      setSimState('running_step');
+      
+      try {
+          const apiKey = getApiKey();
+          const model = getModel();
+          
+          const responseContent = await aiService.handleFailResponse(
+              genericFailPrompt || '',
+              currentStep,
+              lastUserMessage!, // Should exist if we are here
+              lastAiResponse || '',
+              apiKey,
+              model
+          );
+          
+          // Add the response to messages
+          const stepLabel = `Step ${currentStepIndex + 1}`;
+          setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: responseContent, 
+              stepTitle: stepLabel,
+              stepIndex: currentStepIndex 
+          }]);
+          
+          // Clear evaluation state
+          setEvalResult(null);
+          setLastUserEvalCriteria(null);
+          
+          // Go back to waiting for eval so user can evaluate the fail response or move on
+          setSimState('waiting_for_eval');
+          
+      } catch (error) {
+          toast.error("Error processing fail prompt: " + String(error));
+          setSimState('reviewing_eval'); // Fallback to review so they can at least see the result and try "OK" again or Retry
+      }
   };
 
   const handleNextStep = async () => {
@@ -186,69 +241,10 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   };
 
   const handleOk = async () => {
-      if (!lastUserMessage || !evalResult) {
-          // If missing data, proceed safely
-          handleNextStep();
-          return;
-      }
-
-      // Check if it was a FAIL
-      let isFail = false;
-      try {
-          const jsonMatch = evalResult.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              isFail = parsed.result === 'FAIL';
-          }
-      } catch (e) {
-          // If parsing fails, assume not fail (or handle differently?)
-      }
-
-      if (!isFail) {
-          // If it passed, just go to next step
-          setEvalResult(null);
-          setLastUserEvalCriteria(null);
-          handleNextStep();
-          return;
-      }
-
-      // Logic for FAIL scenario
-      
-      setSimState('running_step');
-      
-      try {
-          const apiKey = getApiKey();
-          const model = getModel();
-          
-          const responseContent = await aiService.handleFailResponse(
-              genericFailPrompt || '',
-              currentStep,
-              lastUserMessage,
-              lastAiResponse || '',
-              apiKey,
-              model
-          );
-          
-          // Add the response to messages
-          const stepLabel = `Step ${currentStepIndex + 1}`;
-          setMessages(prev => [...prev, { 
-              role: 'assistant', 
-              content: responseContent, 
-              stepTitle: stepLabel,
-              stepIndex: currentStepIndex 
-          }]);
-          
-          // Clear evaluation state
-          setEvalResult(null);
-          setLastUserEvalCriteria(null);
-          
-          // Go back to waiting for eval so user can evaluate the fail response or move on
-          setSimState('waiting_for_eval');
-          
-      } catch (error) {
-          toast.error("Error processing fail prompt: " + String(error));
-          setSimState('reviewing_eval');
-      }
+      // Logic for PASS scenario
+      setEvalResult(null);
+      setLastUserEvalCriteria(null);
+      handleNextStep();
   };
 
   const handleReset = () => {
