@@ -63,7 +63,6 @@ export const aiService = {
 
   async evaluateResponse(
       aiResponse: string, 
-      userEvalCriteria: string, 
       step: Step, 
       apiKey: string, 
       modelName: string = "gpt-4o-mini",

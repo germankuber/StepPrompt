@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Step } from '../types';
-import { Send, PlayCircle, Bot, User, XCircle, Gavel, ArrowRight, RotateCcw, Info } from 'lucide-react';
+import { Send, PlayCircle, Bot, User, Gavel, RotateCcw, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
 import { ResetConfirmationModal } from './ResetConfirmationModal';
@@ -30,8 +30,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   const [evalResult, setEvalResult] = useState<string | null>(null);
   // Store the user's evaluation criteria message to add it to history later
   const [lastUserEvalCriteria, setLastUserEvalCriteria] = useState<string | null>(null);
-  // Store the original user message that triggered the step execution
-  const [lastUserMessage, setLastUserMessage] = useState<string | null>(null);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -78,7 +76,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
             const stepLabel = `Step ${currentStepIndex + 1}`;
             setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: stepLabel, stepIndex: currentStepIndex }]);
             setLastAiResponse(response);
-            setLastUserMessage(userInput); // Store the original user message for evaluation
             setSimState('waiting_for_eval'); // Move to Eval state
         } catch (error) {
             const stepLabel = `Step ${currentStepIndex + 1}`;
@@ -113,7 +110,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
 
             const result = await aiService.evaluateResponse(
                 lastAiResponse, 
-                userInput, 
                 effectiveStep, 
                 apiKey, 
                 model,
@@ -223,7 +219,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
           setLastAiResponse(null);
           setEvalResult(null);
           setLastUserEvalCriteria(null);
-          setLastUserMessage(textToSend); // Store the new user message for evaluation
           setInput('');
 
           try {
@@ -254,7 +249,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
               
               setMessages(prev => [...prev, { role: 'assistant', content: response, stepTitle: nextStepLabel, stepIndex: nextIndex }]);
               setLastAiResponse(response);
-              setLastUserMessage(textToSend); // Ensure we have the user message stored
               setSimState('waiting_for_eval');
 
           } catch (error) {
@@ -265,13 +259,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       } else if (isLastStep) {
           toast.success("Simulation Completed!");
       }
-  };
-
-  const handleRetryEval = () => {
-      setSimState('waiting_for_eval');
-      setEvalResult(null);
-      setLastUserEvalCriteria(null); // Clear stored criteria to let them type new one
-      setInput(''); 
   };
 
   const handleOk = async () => {
@@ -289,7 +276,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       setLastAiResponse(null);
       setEvalResult(null);
       setLastUserEvalCriteria(null);
-      setLastUserMessage(null);
       toast.info("Simulation restarted");
   };
 
@@ -432,8 +418,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                               </div>
                               <h3 className="font-bold text-gray-800 text-xl">Evaluation Result</h3>
                           </div>
-                          {/* Close button acting as retry/cancel if they want to manually dismiss, though buttons below are better */}
-                          {/* <button onClick={handleRetryEval} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button> */}
                       </div>
 
                       <div className="bg-purple-50 border border-purple-100 p-5 rounded-lg text-gray-800 text-base leading-relaxed mb-6 max-h-[60vh] overflow-y-auto shadow-inner">
