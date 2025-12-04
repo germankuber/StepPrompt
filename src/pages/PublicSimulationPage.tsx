@@ -103,6 +103,8 @@ export const PublicSimulationPage: React.FC = () => {
         genericEvaluatorPrompt={genericEvaluatorPrompt}
         genericFailPrompt={genericFailPrompt}
         isPublic={true}
+        apiKey={apiKey}
+        modelName={modelName}
       />
     </div>
   );

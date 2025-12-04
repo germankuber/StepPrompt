@@ -58,11 +58,13 @@ interface SimulationRunnerProps {
   genericEvaluatorPrompt?: string;
   genericFailPrompt?: string;
   isPublic?: boolean;
+  apiKey?: string;
+  modelName?: string;
 }
 
 type SimulationState = 'idle' | 'running_step' | 'waiting_for_eval' | 'running_eval' | 'reviewing_eval';
 
-export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExecute, genericEvaluatorPrompt, genericFailPrompt, isPublic = false }) => {
+export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExecute, genericEvaluatorPrompt, genericFailPrompt, isPublic = false, apiKey: propApiKey, modelName: propModelName }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -89,9 +91,15 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   const currentStep = sortedSteps[currentStepIndex];
   const isLastStep = currentStepIndex === sortedSteps.length - 1;
 
-  // Helper to get API key from storage (duplication from App.tsx, ideally context/prop but keeping simple)
-  const getApiKey = () => import.meta.env.VITE_OPENAI_API_KEY || localStorage.getItem('openai_api_key') || '';
-  const getModel = () => localStorage.getItem('openai_model_name') || 'gpt-4o-mini';
+  // Helper to get API key from props, env, or storage (prefer props for public mode)
+  const getApiKey = () => {
+    if (propApiKey) return propApiKey;
+    return import.meta.env.VITE_OPENAI_API_KEY || localStorage.getItem('openai_api_key') || '';
+  };
+  const getModel = () => {
+    if (propModelName) return propModelName;
+    return localStorage.getItem('openai_model_name') || 'gpt-4o-mini';
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
