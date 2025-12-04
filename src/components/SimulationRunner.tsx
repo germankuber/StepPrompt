@@ -198,7 +198,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
           const responseContent = await aiService.handleFailResponse(
               genericFailPrompt || '',
               currentStep,
-              lastUserMessage!, // Should exist if we are here
+              userFeedback, 
               lastAiResponse || '',
               apiKey,
               model
