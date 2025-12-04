@@ -121,5 +121,57 @@ export const aiService = {
         console.error("AI Evaluation Error:", error);
         throw error;
     }
+  },
+
+  async handleFailResponse(
+    genericFailPrompt: string,
+    step: Step,
+    lastUserMessage: string,
+    lastAiResponse: string,
+    apiKey: string,
+    modelName: string = "gpt-4o-mini"
+  ): Promise<string> {
+    const key = apiKey?.trim();
+    if (!key) throw new Error("Missing API Key");
+
+    const chat = new ChatOpenAI({
+      apiKey: key,
+      modelName: modelName,
+      temperature: 0.7,
+      // @ts-ignore
+      dangerouslyAllowBrowser: true,
+      configuration: { dangerouslyAllowBrowser: true }
+    });
+
+    const messages = [];
+
+    // 1. System Message: Generic Fail Prompt
+    if (genericFailPrompt && genericFailPrompt.trim() !== '') {
+        messages.push(new SystemMessage(genericFailPrompt));
+    }
+
+    // 2. User Message: Fail Prompt of current step
+    // If fail prompt is missing, fallback to lastUserMessage to ensure we send something
+    let failPromptContent = step.failCondition?.content || '{{UserMessage}}';
+    
+    // Replace {{UserMessage}} if present
+    if (lastUserMessage) {
+        failPromptContent = failPromptContent.replace(/\{\{UserMessage\}\}/g, lastUserMessage);
+    }
+    
+    // Replace {{CharacterMessage}} with the last AI response (character message)
+    if (lastAiResponse) {
+        failPromptContent = failPromptContent.replace(/\{\{CharacterMessage\}\}/g, lastAiResponse);
+    }
+    
+    messages.push(new HumanMessage(failPromptContent));
+
+    try {
+        const response = await chat.invoke(messages);
+        return typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+    } catch (error) {
+        console.error("AI Fail Response Error:", error);
+        throw error;
+    }
   }
 };

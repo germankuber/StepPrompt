@@ -186,14 +186,33 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   };
 
   const handleOk = async () => {
-      if (!lastUserMessage) {
-          // If we don't have the user message, just proceed to next step
+      if (!lastUserMessage || !evalResult) {
+          // If missing data, proceed safely
           handleNextStep();
           return;
       }
 
-      // Save the evaluation criteria before clearing it
-      const savedEvalCriteria = lastUserEvalCriteria;
+      // Check if it was a FAIL
+      let isFail = false;
+      try {
+          const jsonMatch = evalResult.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              isFail = parsed.result === 'FAIL';
+          }
+      } catch (e) {
+          // If parsing fails, assume not fail (or handle differently?)
+      }
+
+      if (!isFail) {
+          // If it passed, just go to next step
+          setEvalResult(null);
+          setLastUserEvalCriteria(null);
+          handleNextStep();
+          return;
+      }
+
+      // Logic for FAIL scenario
       
       setSimState('running_step');
       
@@ -201,38 +220,14 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
           const apiKey = getApiKey();
           const model = getModel();
           
-          // Create a chat with the generic fail prompt as system message
-          const { ChatOpenAI } = await import("@langchain/openai");
-          const { SystemMessage, HumanMessage } = await import("@langchain/core/messages");
-          
-          const chat = new ChatOpenAI({
-              apiKey: apiKey,
-              modelName: model,
-              temperature: 0.7,
-              // @ts-ignore
-              dangerouslyAllowBrowser: true,
-              configuration: { dangerouslyAllowBrowser: true }
-          });
-
-          const messages = [];
-          
-          // 1. System Message: Generic Fail Prompt
-          if (genericFailPrompt && genericFailPrompt.trim() !== '') {
-              messages.push(new SystemMessage(genericFailPrompt));
-          }
-          
-          // 2. User Message: Fail Prompt of current step with {{UserMessage}} replaced
-          let failPromptContent = currentStep.failCondition?.content || '';
-          if (failPromptContent && failPromptContent.includes('{{UserMessage}}')) {
-              failPromptContent = failPromptContent.replace(/\{\{UserMessage\}\}/g, lastUserMessage);
-          }
-          
-          if (failPromptContent.trim() !== '') {
-              messages.push(new HumanMessage(failPromptContent));
-          }
-
-          const response = await chat.invoke(messages);
-          const responseContent = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+          const responseContent = await aiService.handleFailResponse(
+              genericFailPrompt || '',
+              currentStep,
+              lastUserMessage,
+              lastAiResponse || '',
+              apiKey,
+              model
+          );
           
           // Add the response to messages
           const stepLabel = `Step ${currentStepIndex + 1}`;
@@ -243,12 +238,13 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
               stepIndex: currentStepIndex 
           }]);
           
-          // Clear evaluation state but restore the criteria for handleNextStep
+          // Clear evaluation state
           setEvalResult(null);
-          setLastUserEvalCriteria(savedEvalCriteria);
+          setLastUserEvalCriteria(null);
           
-          // Then proceed to next step
-          handleNextStep();
+          // Go back to waiting for eval so user can evaluate the fail response or move on
+          setSimState('waiting_for_eval');
+          
       } catch (error) {
           toast.error("Error processing fail prompt: " + String(error));
           setSimState('reviewing_eval');
