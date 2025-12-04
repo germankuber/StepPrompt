@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Step, PromptConfig } from '../types';
 import { CheckCircle, Play, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { HighlightedTextarea } from './HighlightedTextarea';
 import clsx from 'clsx';
 
 interface StepEditorProps {
@@ -33,11 +34,12 @@ const PromptSection = ({
     
     <div className="space-y-2">
       <div>
-        <textarea
-          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 font-mono text-xs"
+        <HighlightedTextarea
           value={config.content}
-          onChange={(e) => onUpdate(type, 'content', e.target.value)}
+          onChange={(value) => onUpdate(type, 'content', value)}
           placeholder={`Enter ${title.toLowerCase()}...`}
+          className="h-24"
+          rows={6}
         />
       </div>
       

@@ -1,6 +1,7 @@
 import React, { Fragment } from 'react';
 import { Dialog, Transition, Disclosure } from '@headlessui/react';
 import { Globe, Play, Box, AlertTriangle, X, ChevronDown } from 'lucide-react';
+import { HighlightedTextarea } from './HighlightedTextarea';
 
 interface GenericPromptsModalProps {
   isOpen: boolean;
@@ -46,12 +47,12 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
             />
           </Disclosure.Button>
           <Disclosure.Panel className="px-4 pb-4">
-            <textarea
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm resize-none"
-              rows={16}
+            <HighlightedTextarea
               value={value}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={onChange}
               placeholder={placeholder}
+              className="p-3"
+              rows={16}
             />
           </Disclosure.Panel>
         </div>
