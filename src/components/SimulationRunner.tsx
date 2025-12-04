@@ -129,7 +129,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
 
             if (isFail) {
                 setEvalResult(result); // Store it just in case, though we are auto-advancing
-                await executeFailSequence();
+                await executeFailSequence(userInput);
             } else {
                 setEvalResult(result);
                 setSimState('reviewing_eval');
@@ -141,9 +141,14 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
     }
   };
 
-  const executeFailSequence = async () => {
+  const executeFailSequence = async (userFeedback: string) => {
       setSimState('running_step');
       
+      const stepLabel = `Step ${currentStepIndex + 1}`;
+      
+      // Add User Message (The feedback/input)
+      setMessages(prev => [...prev, { role: 'user', content: userFeedback, stepTitle: stepLabel }]);
+
       try {
           const apiKey = getApiKey();
           const model = getModel();
@@ -158,7 +163,6 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
           );
           
           // Add the response to messages
-          const stepLabel = `Step ${currentStepIndex + 1}`;
           setMessages(prev => [...prev, { 
               role: 'assistant', 
               content: responseContent, 
