@@ -93,6 +93,10 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
         setSimState('running_eval');
         setLastUserEvalCriteria(userInput); // Store criteria to add to history later if approved
         
+        // Add User Message (The feedback/input) IMMEDIATELY
+        const stepLabel = `Step ${currentStepIndex + 1}`;
+        setMessages(prev => [...prev, { role: 'user', content: userInput, stepTitle: stepLabel }]);
+        
         try {
             const apiKey = getApiKey();
             const model = getModel();
@@ -132,6 +136,45 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 await executeFailSequence(userInput);
             } else {
                 setEvalResult(result);
+                // Remove the speculative user message if we are going to reviewing_eval
+                // Actually, if we are in reviewing_eval (popup), we might want to keep it or hide it?
+                // The current flow: 
+                // 1. User sends message -> shown in chat
+                // 2. Evaluator runs
+                // 3. If PASS -> Show popup. The user message is behind the popup.
+                //    When OK is clicked -> handleNextStep is called.
+                //    handleNextStep adds the message AGAIN to history as the "next step" trigger? 
+                //    Wait, handleNextStep uses lastUserEvalCriteria as content.
+                
+                // If we show it now, we shouldn't add it again later.
+                // Let's remove it from messages state if it's NOT a fail, to match previous behavior where it appears only after transition?
+                // OR better: Keep it, and handleNextStep should NOT add it again if it's already there?
+                // The previous logic was: handleNextStep adds it.
+                
+                // Let's remove it for now if NOT fail, to keep consistent with "popup -> next step" flow where it appears as part of next step.
+                // But user wants to see it immediately.
+                
+                // If we keep it here:
+                // handleNextStep will take `lastUserEvalCriteria` and put it as `user` message for next step.
+                // This means we'd have duplicate messages if we don't be careful.
+                
+                // Correct approach for PASS:
+                // The message is "Evaluation Criteria". 
+                // If PASS, this criteria becomes the "User Message" for the NEXT step.
+                // So visually it belongs to the NEXT step block.
+                
+                // If FAIL, it belongs to CURRENT step block as a "critique".
+                
+                // If we show it now, it appears in CURRENT step block.
+                // If PASS, we might want to "move" it to next step or just accept it's here.
+                
+                // Let's revert the addition if it's NOT a fail (i.e. we are showing popup).
+                // This is a bit hacky but ensures consistency with "next step" logic.
+                // BUT user said "when I send it must appear immediately".
+                
+                // So we MUST keep it. 
+                // We need to adjust handleNextStep to NOT add it again, or recognize it's already there.
+                
                 setSimState('reviewing_eval');
             }
         } catch (error) {
@@ -146,9 +189,8 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       
       const stepLabel = `Step ${currentStepIndex + 1}`;
       
-      // Add User Message (The feedback/input)
-      setMessages(prev => [...prev, { role: 'user', content: userFeedback, stepTitle: stepLabel }]);
-
+      // Note: User feedback message is already added in handleSend before eval started
+      
       try {
           const apiKey = getApiKey();
           const model = getModel();
@@ -189,16 +231,24 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
           const nextStep = sortedSteps[nextIndex];
           const textToSend = lastUserEvalCriteria;
 
-          // 1. Update UI to show we moved and show user message (evaluation message becomes next user message)
+          // 1. Update UI to show we moved
           setCurrentStepIndex(nextIndex);
           
           // Use chronological step number for tags
           const nextStepLabel = `Step ${nextIndex + 1}`;
           
+          // Note: The user message (textToSend) was already added to messages when they typed it (in handleSend).
+          // However, it was added with the OLD step label. 
+          // If we want it to look like it triggered the next step, strictly speaking it's already in the past.
+          // But usually we want: [Step 1 System] -> [Step 1 User] -> [Step 1 AI] -> [Step 1 Eval/User] -> [Step 2 AI]
+          
+          // If we added it in handleSend, it is at the end of the list with Step 1 label.
+          // Now we transition. 
+          
           setMessages(prev => [
               ...prev, 
-              { role: 'system', content: `--- Moving to Step ${nextIndex + 1}: ${nextStep.title} ---`, stepTitle: nextStepLabel },
-              { role: 'user', content: textToSend, stepTitle: nextStepLabel }
+              { role: 'system', content: `--- Moving to Step ${nextIndex + 1}: ${nextStep.title} ---`, stepTitle: nextStepLabel }
+              // We DO NOT add user message here again because it was added in handleSend
           ]);
           
           // 2. Clear Eval state
@@ -211,13 +261,26 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
 
           try {
               // 3. Execute with NEW step and UPDATED history
-              // Note: 'messages' state won't be updated yet in this closure, so we need to construct history manually
+              // We need to construct history. 
+              // The messages state ALREADY contains the user message we just sent (added in handleSend).
+              // So we can just use `messages` (but we need to access the updated state which isn't available in this closure immediately)
+              // Actually, React state updates are batched. `messages` here is still the old one?
+              // No, handleSend added it, then we waited for eval. So `messages` should contain it.
+              
               const currentHistory = messages
                    .filter(m => m.role === 'user' || m.role === 'assistant')
                    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
               
-              // Add the user message we just "sent" to the history passed to API
-              const updatedHistory = [...currentHistory, { role: 'user', content: textToSend }];
+              // We don't need to manually append textToSend to history if it's already in `messages`.
+              // But wait, `messages` in this scope might be stale if we didn't wait for re-render?
+              // handleNextStep is called from handleOk (user click) or auto-fail.
+              // So `messages` should be up to date with what happened in handleSend.
+              
+              // Let's verify: handleSend adds message -> awaits eval -> sets simState.
+              // User clicks OK -> handleOk -> handleNextStep.
+              // So yes, `messages` has the user message.
+              
+              const updatedHistory = currentHistory; // It already has the latest user message
 
               const response = await onExecute(textToSend, nextStep, updatedHistory);
               const nextStepLabel = `Step ${nextIndex + 1}`;
