@@ -1,11 +1,11 @@
 import React from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Layout as LayoutIcon, Play, List, Settings, 
   FlaskConical, ChevronLeft, ChevronRight,
-  Save, Loader2, ArrowLeft 
+  Save, Loader2, ArrowLeft, Share2 
 } from 'lucide-react';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import clsx from 'clsx';
 
 interface MainLayoutProps {
@@ -15,6 +15,7 @@ interface MainLayoutProps {
   onSave?: () => void;
   loading?: boolean;
   currentScenarioName?: string | null;
+  currentScenarioId?: string | null;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({ 
@@ -22,32 +23,98 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   setIsSidebarCollapsed,
   onSave,
   loading,
-  currentScenarioName
+  currentScenarioName,
+  currentScenarioId
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const isEditor = location.pathname === '/';
-  const isSimulation = location.pathname === '/simulation';
+  const isSimulation = location.pathname.startsWith('/simulation');
   const isScenarios = location.pathname === '/scenarios';
   const isConfig = location.pathname === '/config';
 
-  const SidebarItem = ({ icon: Icon, label, to, active }: any) => (
-    <Link
-      to={to}
-      title={isSidebarCollapsed ? label : undefined}
-      className={clsx(
-        "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors cursor-pointer relative group",
-        active 
-          ? "text-white bg-gray-800 border-r-2 border-green-500" 
-          : "text-gray-400 hover:text-white hover:bg-gray-800/50"
-      )}
-    >
-      <Icon className={clsx("flex-shrink-0", isSidebarCollapsed ? "w-6 h-6 mx-auto" : "w-5 h-5")} />
-      
-      {!isSidebarCollapsed && (
-          <span>{label}</span>
-      )}
-    </Link>
-  );
+  const handlePlayClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (currentScenarioId) {
+      navigate(`/simulation/${currentScenarioId}`);
+    } else {
+      toast.error('Please save the scenario first', {
+        description: 'You need to save the scenario before running the simulation',
+        action: {
+          label: 'Save',
+          onClick: () => onSave?.()
+        }
+      });
+    }
+  };
+
+  const handlePublicPlayClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (currentScenarioId) {
+      const publicUrl = `${window.location.origin}/simulation/public/${currentScenarioId}`;
+      navigate(`/simulation/public/${currentScenarioId}`);
+      // Copy to clipboard
+      navigator.clipboard.writeText(publicUrl).then(() => {
+        toast.success('Public link copied to clipboard!', {
+          description: publicUrl
+        });
+      }).catch(() => {
+        toast.info('Public simulation opened', {
+          description: `Share this link: ${publicUrl}`
+        });
+      });
+    } else {
+      toast.error('Please save the scenario first', {
+        description: 'You need to save the scenario before sharing it publicly',
+        action: {
+          label: 'Save',
+          onClick: () => onSave?.()
+        }
+      });
+    }
+  };
+
+  const SidebarItem = ({ icon: Icon, label, to, active, onClick }: any) => {
+    if (onClick) {
+      return (
+        <button
+          onClick={onClick}
+          title={isSidebarCollapsed ? label : undefined}
+          className={clsx(
+            "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors cursor-pointer relative group",
+            active 
+              ? "text-white bg-gray-800 border-r-2 border-green-500" 
+              : "text-gray-400 hover:text-white hover:bg-gray-800/50"
+          )}
+        >
+          <Icon className={clsx("flex-shrink-0", isSidebarCollapsed ? "w-6 h-6 mx-auto" : "w-5 h-5")} />
+          
+          {!isSidebarCollapsed && (
+              <span>{label}</span>
+          )}
+        </button>
+      );
+    }
+    
+    return (
+      <Link
+        to={to}
+        title={isSidebarCollapsed ? label : undefined}
+        className={clsx(
+          "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors cursor-pointer relative group",
+          active 
+            ? "text-white bg-gray-800 border-r-2 border-green-500" 
+            : "text-gray-400 hover:text-white hover:bg-gray-800/50"
+        )}
+      >
+        <Icon className={clsx("flex-shrink-0", isSidebarCollapsed ? "w-6 h-6 mx-auto" : "w-5 h-5")} />
+        
+        {!isSidebarCollapsed && (
+            <span>{label}</span>
+        )}
+      </Link>
+    );
+  };
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans overflow-hidden">
@@ -89,8 +156,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             <SidebarItem 
                 icon={Play} 
                 label="Run Simulation" 
-                to="/simulation" 
-                active={isSimulation} 
+                to={currentScenarioId ? `/simulation/${currentScenarioId}` : "#"} 
+                active={isSimulation}
+                onClick={currentScenarioId ? undefined : handlePlayClick}
             />
             <SidebarItem 
                 icon={List} 
@@ -161,12 +229,22 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                         >
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                         </button>
-                        <Link 
-                            to="/simulation"
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-green-50 text-green-600 hover:bg-green-100"
+                        <button
+                            onClick={handlePlayClick}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-green-50 text-green-600 hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={currentScenarioId ? 'Run Simulation' : 'Save scenario first to run simulation'}
                         >
                             <Play className="w-4 h-4" /> Run
-                        </Link>
+                        </button>
+                        <button
+                            onClick={handlePublicPlayClick}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-purple-50 text-purple-600 hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={currentScenarioId ? 'Open Public Simulation (shareable link)' : 'Save scenario first to share publicly'}
+                        >
+                            <Share2 className="w-4 h-4" /> Public
+                        </button>
                     </div>
                 )}
             </div>

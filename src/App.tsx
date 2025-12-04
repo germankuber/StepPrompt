@@ -5,6 +5,7 @@ import { normalizeStep } from './types';
 import { MainLayout } from './components/MainLayout';
 import { ScenarioEditorPage } from './pages/ScenarioEditorPage';
 import { SimulationPage } from './pages/SimulationPage';
+import { PublicSimulationPage } from './pages/PublicSimulationPage';
 import { ScenariosPage } from './pages/ScenariosPage';
 import { ConfigPage } from './pages/ConfigPage';
 import { SaveModal } from './components/SaveModal';
@@ -36,6 +37,7 @@ function App() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [stepToDeleteId, setStepToDeleteId] = useState<string | null>(null);
   const [currentScenarioName, setCurrentScenarioName] = useState<string | null>(null);
+  const [currentScenarioId, setCurrentScenarioId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const [apiKey, setApiKey] = useState(() => {
@@ -125,6 +127,8 @@ function App() {
         setStepToDeleteId={setStepToDeleteId}
         currentScenarioName={currentScenarioName}
         setCurrentScenarioName={setCurrentScenarioName}
+        currentScenarioId={currentScenarioId}
+        setCurrentScenarioId={setCurrentScenarioId}
         isSidebarCollapsed={isSidebarCollapsed}
         setIsSidebarCollapsed={setIsSidebarCollapsed}
       />
@@ -149,6 +153,7 @@ const AppRoutes = (props: any) => {
     isDeleteModalOpen, setIsDeleteModalOpen,
     stepToDeleteId, setStepToDeleteId,
     currentScenarioName, setCurrentScenarioName,
+    currentScenarioId, setCurrentScenarioId,
     isSidebarCollapsed, setIsSidebarCollapsed
   } = props;
 
@@ -168,6 +173,7 @@ const AppRoutes = (props: any) => {
         }
 
         setCurrentScenarioName(name);
+        setCurrentScenarioId(scenarioId);
         navigate('/');
         toast.success(`Loaded scenario: ${name}`);
     } catch (error) {
@@ -181,8 +187,9 @@ const AppRoutes = (props: any) => {
   const handleSaveScenario = async (name: string) => {
     setLoading(true);
     try {
-      await stepService.saveScenario(name, steps, genericExecutionPrompt, genericEvaluatorPrompt, genericFailPrompt);
+      const scenarioId = await stepService.saveScenario(name, steps, genericExecutionPrompt, genericEvaluatorPrompt, genericFailPrompt);
       setCurrentScenarioName(name);
+      setCurrentScenarioId(scenarioId);
       toast.success(`Scenario "${name}" saved!`);
       setIsSaveModalOpen(false);
       navigate('/scenarios');
@@ -254,6 +261,7 @@ const AppRoutes = (props: any) => {
             onSave={() => setIsSaveModalOpen(true)}
             loading={loading}
             currentScenarioName={currentScenarioName}
+            currentScenarioId={currentScenarioId}
           >
             {/* Outlet renders child routes */}
           </MainLayout>
@@ -274,12 +282,19 @@ const AppRoutes = (props: any) => {
               }}
             />
           } />
-          <Route path="simulation" element={
+          <Route path="simulation/:scenarioId?" element={
             <SimulationPage 
               steps={steps}
+              setSteps={setSteps}
               onExecute={handleExecuteStep}
               genericEvaluatorPrompt={genericEvaluatorPrompt}
+              setGenericEvaluatorPrompt={setGenericEvaluatorPrompt}
               genericFailPrompt={genericFailPrompt}
+              setGenericFailPrompt={setGenericFailPrompt}
+              setGenericExecutionPrompt={setGenericExecutionPrompt}
+              onLoadScenario={handleLoadScenario}
+              setCurrentScenarioName={setCurrentScenarioName}
+              setCurrentScenarioId={setCurrentScenarioId}
             />
           } />
           <Route path="scenarios" element={
@@ -297,6 +312,8 @@ const AppRoutes = (props: any) => {
             />
           } />
         </Route>
+        {/* Public route without MainLayout */}
+        <Route path="simulation/public/:scenarioId" element={<PublicSimulationPage />} />
       </Routes>
 
       <SaveModal 
