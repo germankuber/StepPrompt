@@ -117,8 +117,8 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                 effectiveStep, 
                 apiKey, 
                 model,
-                lastUserMessage || '', // Pass the original user message for {{UserMessage}} replacement
-                genericEvaluatorPrompt // Pass generic prompt explicitly
+                userInput, // Pass userInput (the feedback) for {{UserMessage}} replacement
+                genericEvaluatorPrompt
             );
             
             // Parse the result to check for FAIL

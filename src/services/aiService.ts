@@ -102,19 +102,8 @@ export const aiService = {
         evalContent = evalContent.replace(/\{\{CharacterMessage\}\}/g, aiResponse);
     }
     
-    // Append the user's manual evaluation criteria/input if provided (though the prompt implies it might be self-contained)
-    // The previous logic wrapped everything in a structured block. Now we just append userEvalCriteria?
-    // User instruction: "como user menssages debes enviar el evalutor prompt de ese step y remplazar el {{CharacterMessage}} y {{UserMessage}}"
-    // It doesn't explicitly say what to do with 'userEvalCriteria' (the input from the text box).
-    // Usually 'userEvalCriteria' IS the additional context or critique the user provides.
-    // If the step's evaluator prompt expects to check against the user's critique, it might not be needed?
-    // However, usually the user input IS the critique.
-    // Let's assume we should append it or include it.
-    // Given the previous structure used it as [EVALUATION CRITERIA], let's append it clearly.
-    
-    if (userEvalCriteria) {
-        evalContent += `\n\n[USER CRITIQUE/INPUT]\n${userEvalCriteria}`;
-    }
+    // We do NOT append userEvalCriteria automatically anymore, as the user wants full control via placeholders.
+    // The 'originalUserMessage' passed above is now the user's feedback (userInput), so it's injected via {{UserMessage}}.
 
     messages.push(new HumanMessage(evalContent));
 
