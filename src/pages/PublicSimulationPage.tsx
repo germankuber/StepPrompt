@@ -14,11 +14,11 @@ export const PublicSimulationPage: React.FC = () => {
   const [genericFailPrompt, setGenericFailPrompt] = useState('');
   const [genericExecutionPrompt, setGenericExecutionPrompt] = useState('');
   const [loading, setLoading] = useState(true);
-  const [apiKey, setApiKey] = useState(() => {
+  const [apiKey] = useState(() => {
     const envKey = import.meta.env.VITE_OPENAI_API_KEY;
     return envKey || localStorage.getItem('openai_api_key') || '';
   });
-  const [modelName, setModelName] = useState(() => localStorage.getItem('openai_model_name') || 'gpt-4o-mini');
+  const [modelName] = useState(() => localStorage.getItem('openai_model_name') || 'gpt-4o-mini');
 
   useEffect(() => {
     const loadScenario = async () => {

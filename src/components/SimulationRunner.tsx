@@ -667,7 +667,7 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                     autoFocus
                   />
                   <button 
-                    onClick={handleSend}
+                    onClick={() => handleSend()}
                     disabled={!input.trim() || simState === 'running_step' || simState === 'running_eval'}
                     className="text-white p-4 rounded-xl transition-colors shadow-md flex-shrink-0 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
