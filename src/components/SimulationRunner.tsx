@@ -457,10 +457,13 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && input.trim() && simState !== 'running_step' && simState !== 'running_eval') {
+                            handleSend();
+                          }
+                        }}
                         placeholder="Type your message here..."
                         className="flex-1 border border-gray-300 rounded-xl px-6 py-4 text-lg outline-none shadow-sm transition-all focus:ring-2 focus:ring-blue-500"
-                        disabled={simState === 'running_step' || simState === 'running_eval'}
                         autoFocus
                     />
                     <button 
