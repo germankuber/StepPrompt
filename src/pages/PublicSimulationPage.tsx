@@ -4,6 +4,7 @@ import { SimulationRunner } from '../components/SimulationRunner';
 import type { Step } from '../types';
 import { normalizeStep } from '../types';
 import { stepService } from '../services/stepService';
+import { settingsService } from '../services/settingsService';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
 
@@ -14,11 +15,8 @@ export const PublicSimulationPage: React.FC = () => {
   const [genericFailPrompt, setGenericFailPrompt] = useState('');
   const [genericExecutionPrompt, setGenericExecutionPrompt] = useState('');
   const [loading, setLoading] = useState(true);
-  const [apiKey] = useState(() => {
-    const envKey = import.meta.env.VITE_OPENAI_API_KEY;
-    return envKey || localStorage.getItem('openai_api_key') || '';
-  });
-  const [modelName] = useState(() => localStorage.getItem('openai_model_name') || 'gpt-4o-mini');
+  const [apiKey, setApiKey] = useState<string>('');
+  const [modelName, setModelName] = useState<string>('gpt-4o-mini');
 
   useEffect(() => {
     const loadScenario = async () => {
@@ -30,6 +28,18 @@ export const PublicSimulationPage: React.FC = () => {
 
       setLoading(true);
       try {
+        // Load API key and model from database (not localStorage)
+        const [savedApiKey, savedModelName] = await Promise.all([
+          settingsService.getSetting('openai_api_key'),
+          settingsService.getSetting('openai_model_name')
+        ]);
+
+        // Use env var first, then DB, then empty string
+        const envKey = import.meta.env.VITE_OPENAI_API_KEY;
+        setApiKey(envKey || savedApiKey || '');
+        setModelName(savedModelName || 'gpt-4o-mini');
+
+        // Load scenario steps and details
         const loadedSteps = await stepService.getStepsForScenario(scenarioId);
         const normalizedSteps = loadedSteps.map(step => normalizeStep(step));
         setSteps(normalizedSteps);
