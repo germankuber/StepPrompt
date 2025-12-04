@@ -42,6 +42,7 @@ export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
       order_index: steps.length,
       execution: { content: '', injectUserMessage: false },
       successCondition: { content: '', injectUserMessage: false },
+      failCondition: { content: '', injectUserMessage: false },
     };
     setSteps([...steps, newStep]);
   };

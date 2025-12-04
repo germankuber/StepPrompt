@@ -158,6 +158,10 @@ const mapDbToStep = (db: DbStep): Step => ({
     content: db.success_prompt || '',
     injectUserMessage: db.success_inject_user || false,
   },
+  failCondition: {
+    content: db.fail_prompt || '',
+    injectUserMessage: db.fail_inject_user || false,
+  },
 });
 
 const mapStepToDb = (step: Step): DbStep & { scenario_id?: string } => ({
@@ -168,4 +172,6 @@ const mapStepToDb = (step: Step): DbStep & { scenario_id?: string } => ({
   execution_inject_user: step.execution.injectUserMessage,
   success_prompt: step.successCondition.content,
   success_inject_user: step.successCondition.injectUserMessage,
+  fail_prompt: step.failCondition.content,
+  fail_inject_user: step.failCondition.injectUserMessage,
 });

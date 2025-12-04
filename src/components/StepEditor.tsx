@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Step, PromptConfig } from '../types';
-import { CheckCircle, Play, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { normalizeStep } from '../types';
+import { CheckCircle, Play, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { HighlightedTextarea } from './HighlightedTextarea';
 import clsx from 'clsx';
 
@@ -23,52 +24,33 @@ const PromptSection = ({
   title: string; 
   icon: React.ElementType; 
   config: PromptConfig; 
-  type: 'execution' | 'successCondition';
-  onUpdate: (type: 'execution' | 'successCondition', field: keyof PromptConfig, value: any) => void;
-}) => (
+  type: 'execution' | 'successCondition' | 'failCondition';
+  onUpdate: (type: 'execution' | 'successCondition' | 'failCondition', field: keyof PromptConfig, value: any) => void;
+}) => {
+  const iconColor = type === 'failCondition' ? 'text-orange-600' : 'text-blue-600';
+  return (
   <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
     <div className="flex items-center gap-2 mb-2">
-      <Icon className="w-4 h-4 text-blue-600" />
+      <Icon className={`w-4 h-4 ${iconColor}`} />
       <h3 className="font-semibold text-gray-700 text-sm">{title}</h3>
     </div>
     
-    <div className="space-y-2">
-      <div>
-        <HighlightedTextarea
-          value={config.content}
-          onChange={(value) => onUpdate(type, 'content', value)}
-          placeholder={`Enter ${title.toLowerCase()}...`}
-          className="h-24"
-          rows={6}
-        />
-      </div>
-      
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-              checked={config.injectUserMessage}
-              onChange={(e) => onUpdate(type, 'injectUserMessage', e.target.checked)}
-            />
-            <span className={clsx("text-xs", config.injectUserMessage ? "text-blue-700 font-medium" : "text-gray-500")}>
-              Inject User Message
-            </span>
-          </label>
-          {config.injectUserMessage && <User className="w-3.5 h-3.5 text-blue-500" />}
-        </div>
-        {config.injectUserMessage && (
-          <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
-            💡 Use <code className="font-mono bg-white px-1 rounded">{'{{UserMessage}}'}</code> in your prompt to inject the user's message
-          </div>
-        )}
-      </div>
+    <div>
+      <HighlightedTextarea
+        value={config.content}
+        onChange={(value) => onUpdate(type, 'content', value)}
+        placeholder={`Enter ${title.toLowerCase()}...`}
+        className="h-24"
+        rows={6}
+      />
     </div>
   </div>
-);
+  );
+};
 
 export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete, isExpanded: initialExpanded, onToggleExpand }) => {
+  // Normalize step to ensure failCondition exists
+  const normalizedStep = normalizeStep(step);
   
   // Internal state fallback if parent doesn't control expansion
   const [localExpanded, setLocalExpanded] = useState(initialExpanded ?? true);
@@ -83,13 +65,23 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
       }
   };
 
-  const updatePrompt = (key: 'execution' | 'successCondition', field: keyof PromptConfig, value: any) => {
+  const updatePrompt = (key: 'execution' | 'successCondition' | 'failCondition', field: keyof PromptConfig, value: any) => {
+    const updatedConfig = {
+      ...normalizedStep[key],
+      [field]: value,
+    };
+    
+    // Auto-enable injectUserMessage if {{UserMessage}} is detected in content
+    if (field === 'content' && typeof value === 'string') {
+      const hasUserMessage = value.includes('{{UserMessage}}');
+      if (hasUserMessage && !updatedConfig.injectUserMessage) {
+        updatedConfig.injectUserMessage = true;
+      }
+    }
+    
     onUpdate({
-      ...step,
-      [key]: {
-        ...step[key],
-        [field]: value,
-      },
+      ...normalizedStep,
+      [key]: updatedConfig,
     });
   };
 
@@ -105,13 +97,13 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
       >
         <div className="flex items-center gap-3">
             <span className="flex items-center justify-center w-6 h-6 bg-blue-100 text-blue-700 rounded-full font-bold text-xs">
-                {step.order_index + 1}
+                {normalizedStep.order_index + 1}
             </span>
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                 <input 
                     type="text" 
-                    value={step.title}
-                    onChange={(e) => onUpdate({...step, title: e.target.value})}
+                    value={normalizedStep.title}
+                    onChange={(e) => onUpdate({...normalizedStep, title: e.target.value})}
                     className="text-base font-bold text-gray-800 bg-transparent border-none focus:ring-0 hover:bg-gray-100 rounded px-2 py-0.5"
                 />
             </div>
@@ -121,12 +113,11 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
             <button 
             onClick={(e) => {
                 e.stopPropagation();
-                onDelete(step.id);
+                onDelete(normalizedStep.id);
             }}
             className="text-red-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-colors"
             title="Delete Step"
             >
-             <User className="w-0 h-0 hidden" /> {/* Hack to keep import but Trash icon is better if imported */}
              <span className="text-[10px] font-medium uppercase tracking-wider">Delete</span>
             </button>
             <div className="text-gray-400">
@@ -138,19 +129,26 @@ export const StepEditor: React.FC<StepEditorProps> = ({ step, onUpdate, onDelete
       {/* Collapsible Content */}
       {isExpanded && (
         <div className="p-4 animate-in slide-in-from-top-2 duration-200">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <PromptSection 
                 title="Execution Context" 
                 icon={Play} 
-                config={step.execution} 
+                config={normalizedStep.execution} 
                 type="execution"
                 onUpdate={updatePrompt}
                 />
                 <PromptSection 
                 title="Evaluator Prompt" 
                 icon={CheckCircle} 
-                config={step.successCondition} 
+                config={normalizedStep.successCondition} 
                 type="successCondition" 
+                onUpdate={updatePrompt}
+                />
+                <PromptSection 
+                title="Fail Prompt" 
+                icon={AlertTriangle} 
+                config={normalizedStep.failCondition} 
+                type="failCondition" 
                 onUpdate={updatePrompt}
                 />
             </div>

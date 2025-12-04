@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import type { Step } from './types';
+import { normalizeStep } from './types';
 import { MainLayout } from './components/MainLayout';
 import { ScenarioEditorPage } from './pages/ScenarioEditorPage';
 import { SimulationPage } from './pages/SimulationPage';
@@ -17,7 +18,12 @@ import { toast } from 'sonner';
 function App() {
   const [steps, setSteps] = useState<Step[]>(() => {
     const saved = localStorage.getItem('simulation_steps');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Normalize steps to ensure they have failCondition
+      return parsed.map((step: Partial<Step>) => normalizeStep(step as any));
+    }
+    return [];
   });
   const [genericExecutionPrompt, setGenericExecutionPrompt] = useState(() => localStorage.getItem('generic_execution_prompt') || '');
   const [genericEvaluatorPrompt, setGenericEvaluatorPrompt] = useState(() => localStorage.getItem('generic_evaluator_prompt') || '');
@@ -150,7 +156,9 @@ const AppRoutes = (props: any) => {
     setLoading(true);
     try {
         const loadedSteps = await stepService.getStepsForScenario(scenarioId);
-        setSteps(loadedSteps);
+        // Normalize steps to ensure they have failCondition
+        const normalizedSteps = loadedSteps.map(step => normalizeStep(step));
+        setSteps(normalizedSteps);
         
         const scenarioDetails = await stepService.getScenarioById(scenarioId);
         if (scenarioDetails) {
