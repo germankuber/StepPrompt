@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Globe, ChevronDown, ChevronUp, Play, Box, Plus } from 'lucide-react';
+import { Globe, ChevronDown, ChevronUp, Play, Box, Plus, AlertTriangle } from 'lucide-react';
 import { StepEditor } from '../components/StepEditor';
 import type { Step } from '../types';
 
@@ -12,6 +12,8 @@ interface ScenarioEditorPageProps {
   setGenericExecutionPrompt: (val: string) => void;
   genericEvaluatorPrompt: string;
   setGenericEvaluatorPrompt: (val: string) => void;
+  genericFailPrompt: string;
+  setGenericFailPrompt: (val: string) => void;
   onDeleteStep: (id: string) => void;
 }
 
@@ -22,6 +24,8 @@ export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
   setGenericExecutionPrompt,
   genericEvaluatorPrompt,
   setGenericEvaluatorPrompt,
+  genericFailPrompt,
+  setGenericFailPrompt,
   onDeleteStep
 }) => {
   const [isGlobalConfigExpanded, setIsGlobalConfigExpanded] = useState(false);
@@ -61,7 +65,7 @@ export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
                 </div>
                 
                 {isGlobalConfigExpanded && (
-                    <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-200">
+                    <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4 animate-in slide-in-from-top-2 duration-200">
                         <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
                                 <Play className="w-3 h-3" /> Generic Execution Prompt
@@ -82,6 +86,17 @@ export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
                                 value={genericEvaluatorPrompt}
                                 onChange={(e) => setGenericEvaluatorPrompt(e.target.value)}
                                 placeholder="Evaluation rules that apply to ALL steps (prepended to evaluator criteria)..."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" /> Generic Fail Prompt
+                            </label>
+                            <textarea
+                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent h-24 font-mono text-xs"
+                                value={genericFailPrompt}
+                                onChange={(e) => setGenericFailPrompt(e.target.value)}
+                                placeholder="Context for handling failures or retries..."
                             />
                         </div>
                     </div>

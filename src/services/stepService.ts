@@ -8,6 +8,7 @@ export interface Scenario {
     created_at: string;
     generic_execution_prompt?: string;
     generic_evaluator_prompt?: string;
+    generic_fail_prompt?: string;
 }
 
 export const stepService = {
@@ -16,7 +17,8 @@ export const stepService = {
       name: string, 
       steps: Step[], 
       genericExecutionPrompt?: string, 
-      genericEvaluatorPrompt?: string
+      genericEvaluatorPrompt?: string,
+      genericFailPrompt?: string
     ): Promise<string> {
       // 1. Create Scenario
       const { data: scenarioData, error: scenarioError } = await supabase
@@ -24,7 +26,8 @@ export const stepService = {
           .insert([{ 
               name,
               generic_execution_prompt: genericExecutionPrompt,
-              generic_evaluator_prompt: genericEvaluatorPrompt
+              generic_evaluator_prompt: genericEvaluatorPrompt,
+              generic_fail_prompt: genericFailPrompt
           }])
           .select()
           .single();

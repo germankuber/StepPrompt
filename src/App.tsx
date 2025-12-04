@@ -21,6 +21,7 @@ function App() {
   });
   const [genericExecutionPrompt, setGenericExecutionPrompt] = useState(() => localStorage.getItem('generic_execution_prompt') || '');
   const [genericEvaluatorPrompt, setGenericEvaluatorPrompt] = useState(() => localStorage.getItem('generic_evaluator_prompt') || '');
+  const [genericFailPrompt, setGenericFailPrompt] = useState(() => localStorage.getItem('generic_fail_prompt') || '');
   const [loading, setLoading] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -64,6 +65,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('generic_evaluator_prompt', genericEvaluatorPrompt);
   }, [genericEvaluatorPrompt]);
+
+  useEffect(() => {
+    localStorage.setItem('generic_fail_prompt', genericFailPrompt);
+  }, [genericFailPrompt]);
   
   const handleApiKeyChange = (newKey: string) => {
       setApiKey(newKey);
@@ -92,6 +97,8 @@ function App() {
         setGenericExecutionPrompt={setGenericExecutionPrompt}
         genericEvaluatorPrompt={genericEvaluatorPrompt}
         setGenericEvaluatorPrompt={setGenericEvaluatorPrompt}
+        genericFailPrompt={genericFailPrompt}
+        setGenericFailPrompt={setGenericFailPrompt}
         apiKey={apiKey}
         setApiKey={handleApiKeyChange}
         modelName={modelName}
@@ -126,6 +133,7 @@ const AppRoutes = (props: any) => {
     steps, setSteps, 
     genericExecutionPrompt, setGenericExecutionPrompt,
     genericEvaluatorPrompt, setGenericEvaluatorPrompt,
+    genericFailPrompt, setGenericFailPrompt,
     apiKey, setApiKey, modelName, setModelName,
     loading, setLoading,
     isSaveModalOpen, setIsSaveModalOpen,
@@ -148,6 +156,7 @@ const AppRoutes = (props: any) => {
         if (scenarioDetails) {
             setGenericExecutionPrompt(scenarioDetails.generic_execution_prompt || '');
             setGenericEvaluatorPrompt(scenarioDetails.generic_evaluator_prompt || ''); 
+            setGenericFailPrompt(scenarioDetails.generic_fail_prompt || '');
         }
 
         setCurrentScenarioName(name);
@@ -164,7 +173,7 @@ const AppRoutes = (props: any) => {
   const handleSaveScenario = async (name: string) => {
     setLoading(true);
     try {
-      await stepService.saveScenario(name, steps, genericExecutionPrompt, genericEvaluatorPrompt);
+      await stepService.saveScenario(name, steps, genericExecutionPrompt, genericEvaluatorPrompt, genericFailPrompt);
       setCurrentScenarioName(name);
       toast.success(`Scenario "${name}" saved!`);
       setIsSaveModalOpen(false);
@@ -249,6 +258,8 @@ const AppRoutes = (props: any) => {
               setGenericExecutionPrompt={setGenericExecutionPrompt}
               genericEvaluatorPrompt={genericEvaluatorPrompt}
               setGenericEvaluatorPrompt={setGenericEvaluatorPrompt}
+              genericFailPrompt={genericFailPrompt}
+              setGenericFailPrompt={setGenericFailPrompt}
               onDeleteStep={(id) => {
                 setStepToDeleteId(id);
                 setIsDeleteModalOpen(true);
