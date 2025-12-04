@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Step } from '../types';
-import { Send, PlayCircle, Bot, User, CheckCircle, XCircle, Gavel, ArrowRight, RotateCcw } from 'lucide-react';
+import { Send, PlayCircle, Bot, User, XCircle, Gavel, ArrowRight, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
-import clsx from 'clsx';
 import { ResetConfirmationModal } from './ResetConfirmationModal';
 
 interface Message {
@@ -334,38 +333,23 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
       {simState !== 'reviewing_eval' && (
         <div className="p-6 bg-white border-t shadow-lg z-20">
             <div className="w-full">
-                {simState === 'waiting_for_eval' && (
-                    <div className="mb-2 flex items-center gap-2 text-sm text-orange-600 font-medium animate-pulse">
-                        <CheckCircle className="w-4 h-4" />
-                        Please enter criteria to evaluate the AI's response above:
-                    </div>
-                )}
                 <div className="flex gap-4">
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder={simState === 'waiting_for_eval' ? "E.g. 'Did it include a formal greeting?'" : "Type your message here..."}
-                        className={clsx(
-                            "flex-1 border rounded-xl px-6 py-4 text-lg outline-none shadow-sm transition-all",
-                            simState === 'waiting_for_eval' 
-                                ? "border-orange-300 focus:ring-2 focus:ring-orange-500 bg-orange-50/30" 
-                                : "border-gray-300 focus:ring-2 focus:ring-blue-500"
-                        )}
+                        placeholder="Type your message here..."
+                        className="flex-1 border border-gray-300 rounded-xl px-6 py-4 text-lg outline-none shadow-sm transition-all focus:ring-2 focus:ring-blue-500"
                         disabled={simState === 'running_step' || simState === 'running_eval'}
                         autoFocus
                     />
                     <button 
                         onClick={handleSend}
                         disabled={!input.trim() || simState === 'running_step' || simState === 'running_eval'}
-                        className={clsx(
-                            "text-white p-4 rounded-xl transition-colors shadow-md flex-shrink-0",
-                            simState === 'waiting_for_eval' ? "bg-orange-500 hover:bg-orange-600" : "bg-blue-600 hover:bg-blue-700",
-                            "disabled:opacity-50 disabled:cursor-not-allowed"
-                        )}
+                        className="text-white p-4 rounded-xl transition-colors shadow-md flex-shrink-0 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {simState === 'waiting_for_eval' ? <Gavel className="w-6 h-6" /> : <Send className="w-6 h-6" />}
+                        <Send className="w-6 h-6" />
                     </button>
                 </div>
             </div>
