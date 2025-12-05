@@ -3,6 +3,7 @@ import type { Step } from '../types';
 import { Send, PlayCircle, Bot, User, Gavel, RotateCcw, Info, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '../services/aiService';
+import { settingsService } from '../services/settingsService';
 import { ResetConfirmationModal } from './ResetConfirmationModal';
 
 // TypeScript types for Speech Recognition API
@@ -75,6 +76,9 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   const [lastUserEvalCriteria, setLastUserEvalCriteria] = useState<string | null>(null);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   
+  // Model name state - loaded from DB
+  const [dbModelName, setDbModelName] = useState<string>('gpt-4o-mini');
+  
   // Voice mode state
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -90,6 +94,57 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
     messagesRef.current = messages;
   }, [messages]);
 
+  // Load model name from database on mount and when propModelName changes
+  useEffect(() => {
+    const loadModelFromDb = async () => {
+      // If propModelName is provided, use it (for public mode)
+      if (propModelName) {
+        setDbModelName(propModelName);
+        return;
+      }
+      
+      // Otherwise, load from database
+      try {
+        const savedModel = await settingsService.getSetting('openai_model_name');
+        if (savedModel) {
+          setDbModelName(savedModel);
+        } else {
+          // Fallback to localStorage if DB doesn't have it
+          const localModel = localStorage.getItem('openai_model_name');
+          if (localModel) {
+            setDbModelName(localModel);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load model from DB', error);
+        // Fallback to localStorage if DB fails
+        const localModel = localStorage.getItem('openai_model_name');
+        if (localModel) {
+          setDbModelName(localModel);
+        }
+      }
+    };
+    
+    loadModelFromDb();
+  }, [propModelName]);
+
+  // Reload model from DB when simulation state changes to idle (user might have changed model in config)
+  useEffect(() => {
+    if (simState === 'idle' && !propModelName) {
+      const reloadModel = async () => {
+        try {
+          const savedModel = await settingsService.getSetting('openai_model_name');
+          if (savedModel && savedModel !== dbModelName) {
+            setDbModelName(savedModel);
+          }
+        } catch (error) {
+          // Silently fail, use current model
+        }
+      };
+      reloadModel();
+    }
+  }, [simState, propModelName, dbModelName]);
+
   // Use steps directly as passed from App.tsx to respect the user's visual order
   // Do NOT sort by order_index as it might be stale/buggy
   const sortedSteps = steps;
@@ -103,8 +158,10 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
     return import.meta.env.VITE_OPENAI_API_KEY || localStorage.getItem('openai_api_key') || '';
   };
   const getModel = () => {
+    // Always prefer propModelName if provided (for public mode)
     if (propModelName) return propModelName;
-    return localStorage.getItem('openai_model_name') || 'gpt-4o-mini';
+    // Otherwise use the model from database state
+    return dbModelName;
   };
 
   const scrollToBottom = () => {

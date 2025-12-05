@@ -359,6 +359,7 @@ const AppRoutes = (props: any) => {
               onLoadScenario={handleLoadScenario}
               setCurrentScenarioName={setCurrentScenarioName}
               setCurrentScenarioId={setCurrentScenarioId}
+              modelName={modelName}
             />
           } />
           <Route path="scenarios" element={

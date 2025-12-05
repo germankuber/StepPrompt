@@ -18,6 +18,7 @@ interface SimulationPageProps {
   onLoadScenario: (scenarioId: string, name: string) => Promise<void>;
   setCurrentScenarioName: (name: string | null) => void;
   setCurrentScenarioId: (id: string | null) => void;
+  modelName?: string;
 }
 
 export const SimulationPage: React.FC<SimulationPageProps> = ({
@@ -30,7 +31,8 @@ export const SimulationPage: React.FC<SimulationPageProps> = ({
   setGenericFailPrompt,
   setGenericExecutionPrompt,
   setCurrentScenarioName,
-  setCurrentScenarioId
+  setCurrentScenarioId,
+  modelName
 }) => {
   const { scenarioId } = useParams<{ scenarioId?: string }>();
   const [loading, setLoading] = useState(false);
@@ -84,6 +86,7 @@ export const SimulationPage: React.FC<SimulationPageProps> = ({
             onExecute={onExecute}
             genericEvaluatorPrompt={genericEvaluatorPrompt}
             genericFailPrompt={genericFailPrompt}
+            modelName={modelName}
         />
     </div>
   );
