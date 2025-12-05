@@ -41,14 +41,12 @@ export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
 }) => {
   const { scenarioId } = useParams<{ scenarioId?: string }>();
   const [isGenericPromptsModalOpen, setIsGenericPromptsModalOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [lastLoadedScenarioId, setLastLoadedScenarioId] = useState<string | null>(null);
 
   useEffect(() => {
     // Load scenario from URL if scenarioId is provided and different from last loaded
     if (scenarioId && scenarioId !== lastLoadedScenarioId && onLoadScenario && setCurrentScenarioName && setCurrentScenarioId) {
       const loadScenarioFromUrl = async () => {
-        setLoading(true);
         try {
           const loadedSteps = await stepService.getStepsForScenario(scenarioId);
           const normalizedSteps = loadedSteps.map(step => normalizeStep(step));
@@ -66,8 +64,6 @@ export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
         } catch (error) {
           console.error(error);
           toast.error('Failed to load scenario from URL');
-        } finally {
-          setLoading(false);
         }
       };
       loadScenarioFromUrl();
