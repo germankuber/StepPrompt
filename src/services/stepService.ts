@@ -64,6 +64,52 @@ export const stepService = {
       if (error) throw error;
   },
 
+  // Update an existing scenario completely (overwrite)
+  async updateScenario(
+      scenarioId: string,
+      name: string,
+      steps: Step[],
+      genericExecutionPrompt?: string,
+      genericEvaluatorPrompt?: string,
+      genericFailPrompt?: string
+  ): Promise<void> {
+      // 1. Update scenario details
+      const { error: scenarioError } = await supabase
+          .from('scenarios')
+          .update({
+              name,
+              generic_execution_prompt: genericExecutionPrompt,
+              generic_evaluator_prompt: genericEvaluatorPrompt,
+              generic_fail_prompt: genericFailPrompt
+          })
+          .eq('id', scenarioId);
+      
+      if (scenarioError) throw scenarioError;
+
+      // 2. Delete old steps
+      const { error: deleteError } = await supabase
+          .from('steps')
+          .delete()
+          .eq('scenario_id', scenarioId);
+      
+      if (deleteError) throw deleteError;
+
+      // 3. Insert new steps
+      const dbSteps = steps.map(step => {
+          const { id, ...stepData } = mapStepToDb(step);
+          return {
+              ...stepData,
+              scenario_id: scenarioId
+          };
+      });
+
+      const { error: stepsError } = await supabase
+          .from('steps')
+          .insert(dbSteps);
+
+      if (stepsError) throw stepsError;
+  },
+
   // Get all saved scenarios
   async getScenarios(): Promise<Scenario[]> {
       const { data, error } = await supabase

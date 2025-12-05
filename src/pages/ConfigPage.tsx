@@ -6,13 +6,17 @@ interface ConfigPageProps {
   setApiKey: (key: string) => void;
   modelName: string;
   setModelName: (name: string) => void;
+  onSave: () => void;
+  loading?: boolean;
 }
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({
   apiKey,
   setApiKey,
   modelName,
-  setModelName
+  setModelName,
+  onSave,
+  loading
 }) => {
   return (
     <div className="h-full">
@@ -21,6 +25,8 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             onApiKeyChange={setApiKey}
             activeModel={modelName}
             onModelChange={setModelName}
+            onSave={onSave}
+            loading={loading}
         />
     </div>
   );

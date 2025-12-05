@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Layout as LayoutIcon, Play, List, Settings, 
   FlaskConical, ChevronLeft, ChevronRight,
-  Save, Loader2, ArrowLeft, Share2 
+  Save, Loader2, ArrowLeft, Share2, SaveAll 
 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import clsx from 'clsx';
@@ -13,6 +13,7 @@ interface MainLayoutProps {
   isSidebarCollapsed: boolean;
   setIsSidebarCollapsed: (collapsed: boolean) => void;
   onSave?: () => void;
+  onSaveNew?: () => void;
   loading?: boolean;
   currentScenarioName?: string | null;
   currentScenarioId?: string | null;
@@ -22,15 +23,18 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   isSidebarCollapsed, 
   setIsSidebarCollapsed,
   onSave,
+  onSaveNew,
   loading,
   currentScenarioName,
   currentScenarioId
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isEditor = location.pathname === '/';
-  const isSimulation = location.pathname.startsWith('/simulation');
+  // Editor: / or /scenarios/:scenarioId (with ID)
+  const isEditor = location.pathname === '/' || location.pathname.match(/^\/scenarios\/[^/]+$/);
+  // Scenarios list: /scenarios (exact match, no ID)
   const isScenarios = location.pathname === '/scenarios';
+  const isSimulation = location.pathname.startsWith('/simulation');
   const isConfig = location.pathname === '/config';
 
   const handlePlayClick = (e: React.MouseEvent) => {
@@ -150,7 +154,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             <SidebarItem 
                 icon={LayoutIcon} 
                 label="Scenario Editor" 
-                to="/" 
+                to={currentScenarioId ? `/scenarios/${currentScenarioId}` : "/"} 
                 active={isEditor} 
             />
             <SidebarItem 
@@ -221,14 +225,38 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 {/* Action Buttons (Only visible in Editor) */}
                 {isEditor && (
                     <div className="flex items-center gap-2 mr-4 border-r border-gray-200 pr-4">
-                        <button 
-                            onClick={onSave}
-                            disabled={loading}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                            title="Save to Database"
-                        >
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                        </button>
+                        {currentScenarioId ? (
+                            <>
+                                {/* Save New Button */}
+                                <button 
+                                    onClick={onSaveNew}
+                                    disabled={loading}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Save as New Scenario"
+                                >
+                                    <SaveAll className="w-4 h-4" /> Save New
+                                </button>
+                                {/* Overwrite Save Button */}
+                                <button 
+                                    onClick={onSave}
+                                    disabled={loading}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Overwrite Current Scenario"
+                                >
+                                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save
+                                </button>
+                            </>
+                        ) : (
+                            /* Single Save Button when no scenario is loaded */
+                            <button 
+                                onClick={onSave}
+                                disabled={loading}
+                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                title="Save to Database"
+                            >
+                                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                            </button>
+                        )}
                         <button
                             onClick={handlePlayClick}
                             disabled={loading}

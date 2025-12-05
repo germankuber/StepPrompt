@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Database, Plus, Trash2, Check, Save } from 'lucide-react';
+import { Key, Database, Plus, Trash2, Check, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ConfigViewProps {
@@ -7,6 +7,8 @@ interface ConfigViewProps {
   onApiKeyChange: (key: string) => void;
   activeModel: string;
   onModelChange: (model: string) => void;
+  onSave?: () => void;
+  loading?: boolean;
 }
 
 export const ConfigView: React.FC<ConfigViewProps> = ({
@@ -14,6 +16,8 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   onApiKeyChange,
   activeModel,
   onModelChange,
+  onSave,
+  loading = false,
 }) => {
   const [customModels, setCustomModels] = useState<string[]>(() => {
     const saved = localStorage.getItem('custom_models');
@@ -36,9 +40,8 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     setLocalApiKey(apiKey);
   }, [apiKey]);
 
-  const handleSaveApiKey = async () => {
+  const handleSaveApiKey = () => {
     onApiKeyChange(localApiKey);
-    toast.success('API Key saved!');
   };
 
   const handleAddModel = () => {
@@ -65,10 +68,31 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   return (
     <div className="w-full h-full overflow-y-auto bg-gray-50">
       <div className="w-full py-8 px-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <Database className="w-6 h-6 text-blue-600" />
-          Configuration
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Database className="w-6 h-6 text-blue-600" />
+            Configuration
+          </h2>
+          {onSave && (
+            <button
+              onClick={onSave}
+              disabled={loading}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save to Database
+                </>
+              )}
+            </button>
+          )}
+        </div>
 
       <div className="space-y-8">
         {/* API Key Section */}
@@ -81,24 +105,16 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               API Key (Persistent)
             </label>
-            <div className="flex gap-2">
-                <input
-                type="password"
-                value={localApiKey}
-                onChange={(e) => setLocalApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-                />
-                <button
-                    onClick={handleSaveApiKey}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
-                >
-                    <Save className="w-4 h-4" />
-                    Save
-                </button>
-            </div>
+            <input
+              type="password"
+              value={localApiKey}
+              onChange={(e) => setLocalApiKey(e.target.value)}
+              onBlur={handleSaveApiKey}
+              placeholder="sk-..."
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+            />
             <p className="text-xs text-gray-500 mt-2">
-              Your API key is stored locally in your browser. We do not send it to any server other than OpenAI.
+              Your API key will be saved to the database when you click "Save to Database". We do not send it to any server other than OpenAI.
             </p>
           </div>
         </div>

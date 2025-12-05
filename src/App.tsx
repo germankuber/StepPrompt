@@ -51,9 +51,20 @@ function App() {
   useEffect(() => {
       const loadSettings = async () => {
           try {
-              const savedKey = await settingsService.getSetting('openai_api_key');
-              if (savedKey) {
-                  setApiKey(savedKey);
+              const [savedKey, savedModel] = await Promise.all([
+                  settingsService.getSetting('openai_api_key'),
+                  settingsService.getSetting('openai_model_name')
+              ]);
+              
+              // Use env var first, then DB, then empty string for API key
+              const envKey = import.meta.env.VITE_OPENAI_API_KEY;
+              if (envKey || savedKey) {
+                  setApiKey(envKey || savedKey || '');
+              }
+              
+              // Load model from DB
+              if (savedModel) {
+                  setModelName(savedModel);
               }
           } catch (error) {
               console.error("Failed to load settings", error);
@@ -80,18 +91,8 @@ function App() {
   
   const handleApiKeyChange = (newKey: string) => {
       setApiKey(newKey);
-      // Save to localStorage for immediate use/backup
-      localStorage.setItem('openai_api_key', newKey);
-      // Save to DB
-      settingsService.saveSetting('openai_api_key', newKey).catch(err => {
-          console.error("Failed to save API key to DB", err);
-          toast.error("Failed to save API key to database");
-      });
+      // Don't auto-save to DB, wait for save button
   };
-
-  useEffect(() => {
-    localStorage.setItem('openai_model_name', modelName);
-  }, [modelName]);
 
   // Wrap load/save handlers to use hooks if needed or keep them simple
   // We need a component to use useNavigate
@@ -174,7 +175,7 @@ const AppRoutes = (props: any) => {
 
         setCurrentScenarioName(name);
         setCurrentScenarioId(scenarioId);
-        navigate('/');
+        navigate(`/scenarios/${scenarioId}`);
         toast.success(`Loaded scenario: ${name}`);
     } catch (error) {
         console.error(error);
@@ -192,10 +193,37 @@ const AppRoutes = (props: any) => {
       setCurrentScenarioId(scenarioId);
       toast.success(`Scenario "${name}" saved!`);
       setIsSaveModalOpen(false);
-      navigate('/scenarios');
+      navigate(`/scenarios/${scenarioId}`);
     } catch (error) {
       console.error(error);
       toast.error('Failed to save scenario', {
+          description: 'Did you run the database migration?'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOverwriteScenario = async () => {
+    if (!currentScenarioId || !currentScenarioName) {
+      toast.error('No scenario loaded to overwrite');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await stepService.updateScenario(
+        currentScenarioId,
+        currentScenarioName,
+        steps,
+        genericExecutionPrompt,
+        genericEvaluatorPrompt,
+        genericFailPrompt
+      );
+      toast.success(`Scenario "${currentScenarioName}" updated!`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to update scenario', {
           description: 'Did you run the database migration?'
       });
     } finally {
@@ -233,6 +261,22 @@ const AppRoutes = (props: any) => {
     }
   };
 
+  const handleSaveSettings = async () => {
+      setLoading(true);
+      try {
+          await Promise.all([
+              settingsService.saveSetting('openai_api_key', apiKey),
+              settingsService.saveSetting('openai_model_name', modelName)
+          ]);
+          toast.success('Settings saved to database!');
+      } catch (error) {
+          console.error("Failed to save settings", error);
+          toast.error("Failed to save settings to database");
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const handleExecuteStep = async (message: string, step: Step, history: Array<{ role: string, content: string }>) => {
       if (!apiKey.trim()) {
           const errorMsg = "OpenAI API Key is missing";
@@ -258,7 +302,8 @@ const AppRoutes = (props: any) => {
           <MainLayout 
             isSidebarCollapsed={isSidebarCollapsed} 
             setIsSidebarCollapsed={setIsSidebarCollapsed}
-            onSave={() => setIsSaveModalOpen(true)}
+            onSave={currentScenarioId ? handleOverwriteScenario : () => setIsSaveModalOpen(true)}
+            onSaveNew={() => setIsSaveModalOpen(true)}
             loading={loading}
             currentScenarioName={currentScenarioName}
             currentScenarioId={currentScenarioId}
@@ -280,6 +325,25 @@ const AppRoutes = (props: any) => {
                 setStepToDeleteId(id);
                 setIsDeleteModalOpen(true);
               }}
+            />
+          } />
+          <Route path="scenarios/:scenarioId" element={
+            <ScenarioEditorPage 
+              steps={steps}
+              setSteps={setSteps}
+              genericExecutionPrompt={genericExecutionPrompt}
+              setGenericExecutionPrompt={setGenericExecutionPrompt}
+              genericEvaluatorPrompt={genericEvaluatorPrompt}
+              setGenericEvaluatorPrompt={setGenericEvaluatorPrompt}
+              genericFailPrompt={genericFailPrompt}
+              setGenericFailPrompt={setGenericFailPrompt}
+              onDeleteStep={(id) => {
+                setStepToDeleteId(id);
+                setIsDeleteModalOpen(true);
+              }}
+              onLoadScenario={handleLoadScenario}
+              setCurrentScenarioName={setCurrentScenarioName}
+              setCurrentScenarioId={setCurrentScenarioId}
             />
           } />
           <Route path="simulation/:scenarioId?" element={
@@ -309,6 +373,8 @@ const AppRoutes = (props: any) => {
               setApiKey={setApiKey}
               modelName={modelName}
               setModelName={setModelName}
+              onSave={handleSaveSettings}
+              loading={loading}
             />
           } />
         </Route>

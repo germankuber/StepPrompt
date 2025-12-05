@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { Globe, Plus, Box } from 'lucide-react';
 import { StepEditor } from '../components/StepEditor';
 import { GenericPromptsModal } from '../components/GenericPromptsModal';
 import type { Step } from '../types';
+import { normalizeStep } from '../types';
+import { stepService } from '../services/stepService';
+import { toast } from 'sonner';
 
 const generateId = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
 
@@ -16,6 +20,9 @@ interface ScenarioEditorPageProps {
   genericFailPrompt: string;
   setGenericFailPrompt: (val: string) => void;
   onDeleteStep: (id: string) => void;
+  onLoadScenario?: (scenarioId: string, name: string) => Promise<void>;
+  setCurrentScenarioName?: (name: string | null) => void;
+  setCurrentScenarioId?: (id: string | null) => void;
 }
 
 export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
@@ -27,9 +34,50 @@ export const ScenarioEditorPage: React.FC<ScenarioEditorPageProps> = ({
   setGenericEvaluatorPrompt,
   genericFailPrompt,
   setGenericFailPrompt,
-  onDeleteStep
+  onDeleteStep,
+  onLoadScenario,
+  setCurrentScenarioName,
+  setCurrentScenarioId
 }) => {
+  const { scenarioId } = useParams<{ scenarioId?: string }>();
   const [isGenericPromptsModalOpen, setIsGenericPromptsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [lastLoadedScenarioId, setLastLoadedScenarioId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Load scenario from URL if scenarioId is provided and different from last loaded
+    if (scenarioId && scenarioId !== lastLoadedScenarioId && onLoadScenario && setCurrentScenarioName && setCurrentScenarioId) {
+      const loadScenarioFromUrl = async () => {
+        setLoading(true);
+        try {
+          const loadedSteps = await stepService.getStepsForScenario(scenarioId);
+          const normalizedSteps = loadedSteps.map(step => normalizeStep(step));
+          setSteps(normalizedSteps);
+          
+          const scenarioDetails = await stepService.getScenarioById(scenarioId);
+          if (scenarioDetails) {
+            setGenericExecutionPrompt(scenarioDetails.generic_execution_prompt || '');
+            setGenericEvaluatorPrompt(scenarioDetails.generic_evaluator_prompt || ''); 
+            setGenericFailPrompt(scenarioDetails.generic_fail_prompt || '');
+            setCurrentScenarioName(scenarioDetails.name);
+            setCurrentScenarioId(scenarioId);
+          }
+          setLastLoadedScenarioId(scenarioId);
+        } catch (error) {
+          console.error(error);
+          toast.error('Failed to load scenario from URL');
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadScenarioFromUrl();
+    } else if (!scenarioId && lastLoadedScenarioId) {
+      // If no scenarioId in URL but we had one loaded, reset
+      setLastLoadedScenarioId(null);
+      if (setCurrentScenarioName) setCurrentScenarioName(null);
+      if (setCurrentScenarioId) setCurrentScenarioId(null);
+    }
+  }, [scenarioId, lastLoadedScenarioId, setSteps, setGenericExecutionPrompt, setGenericEvaluatorPrompt, setGenericFailPrompt, setCurrentScenarioName, setCurrentScenarioId, onLoadScenario]);
 
   const updateStep = (updatedStep: Step) => {
     setSteps(steps.map(s => s.id === updatedStep.id ? updatedStep : s));
