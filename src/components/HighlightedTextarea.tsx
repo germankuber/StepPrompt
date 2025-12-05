@@ -87,6 +87,12 @@ export const HighlightedTextarea: React.FC<HighlightedTextareaProps> = ({
       '<span style="background-color: #bbf7d0 !important; color: #166534 !important; font-weight: 600 !important; padding: 1px 3px !important; border-radius: 3px !important; display: inline-block;">{{CharacterMessage}}</span>'
     );
     
+    // Replace {{StepMessagesHistory}} with highlighted version (Purple)
+    highlighted = highlighted.replace(
+      /\{\{StepMessagesHistory\}\}/g,
+      '<span style="background-color: #e9d5ff !important; color: #6b21a8 !important; font-weight: 600 !important; padding: 1px 3px !important; border-radius: 3px !important; display: inline-block;">{{StepMessagesHistory}}</span>'
+    );
+    
     return highlighted;
   };
 

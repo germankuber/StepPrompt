@@ -83,6 +83,12 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<Message[]>([]);
+  
+  // Keep messagesRef in sync with messages state
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Use steps directly as passed from App.tsx to respect the user's visual order
   // Do NOT sort by order_index as it might be stale/buggy
@@ -304,13 +310,31 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
           const apiKey = getApiKey();
           const model = getModel();
           
+          // Get all messages from the current step using the ref to ensure we have the latest
+          const currentStepLabel = `Step ${currentStepIndex + 1}`;
+          const stepMessagesHistory = messagesRef.current
+              .filter(msg => {
+                  // Include if stepIndex matches OR stepTitle matches current step
+                  // Also exclude messages from previous steps (stepIndex < currentStepIndex)
+                  const hasMatchingStepIndex = msg.stepIndex === currentStepIndex;
+                  const hasMatchingStepTitle = msg.stepTitle === currentStepLabel;
+                  const isFromPreviousStep = msg.stepIndex !== undefined && msg.stepIndex < currentStepIndex;
+                  
+                  return (hasMatchingStepIndex || hasMatchingStepTitle) && !isFromPreviousStep;
+              })
+              .map(msg => ({
+                  role: msg.role,
+                  content: msg.content
+              }));
+          
           const responseContent = await aiService.handleFailResponse(
               genericFailPrompt || '',
               currentStep,
               userFeedback, 
               lastAiResponse || '',
               apiKey,
-              model
+              model,
+              stepMessagesHistory
           );
           
           // Add the response to messages

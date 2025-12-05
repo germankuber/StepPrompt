@@ -121,7 +121,8 @@ export const aiService = {
     lastUserMessage: string,
     lastAiResponse: string,
     apiKey: string,
-    modelName: string = "gpt-4o-mini"
+    modelName: string = "gpt-4o-mini",
+    stepMessagesHistory: Array<{ role: 'user' | 'assistant' | 'system', content: string }> = []
   ): Promise<string> {
     const key = apiKey?.trim();
     if (!key) throw new Error("Missing API Key");
@@ -154,6 +155,23 @@ export const aiService = {
     // Replace {{CharacterMessage}} with the last AI response (character message)
     if (lastAiResponse) {
         failPromptContent = failPromptContent.replace(/\{\{CharacterMessage\}\}/g, lastAiResponse);
+    }
+    
+    // Replace {{StepMessagesHistory}} with formatted message history
+    if (stepMessagesHistory && stepMessagesHistory.length > 0) {
+        // Filter out system messages and format the history
+        const formattedHistory = stepMessagesHistory
+            .filter(msg => msg.role !== 'system')
+            .map(msg => {
+                const roleLabel = msg.role === 'user' ? 'Player' : 'Character';
+                return `${roleLabel}:\n${msg.content}`;
+            })
+            .join('\n\n');
+        
+        failPromptContent = failPromptContent.replace(/\{\{StepMessagesHistory\}\}/g, formattedHistory);
+    } else {
+        // If no history, replace with empty string
+        failPromptContent = failPromptContent.replace(/\{\{StepMessagesHistory\}\}/g, '');
     }
     
     messages.push(new HumanMessage(failPromptContent));
