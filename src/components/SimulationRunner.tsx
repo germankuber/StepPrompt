@@ -331,11 +331,12 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
             
             // Parse the result to check for FAIL
             let isFail = false;
+            let parsedResult: { result?: string; reasons?: string[] } | null = null;
             try {
                 const jsonMatch = result.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    isFail = parsed.result === 'FAIL';
+                    parsedResult = JSON.parse(jsonMatch[0]);
+                    isFail = parsedResult !== null && parsedResult.result === 'FAIL';
                 }
             } catch (e) {
                 // If parsing fails, assume not fail
@@ -343,6 +344,25 @@ export const SimulationRunner: React.FC<SimulationRunnerProps> = ({ steps, onExe
 
             if (isFail) {
                 setEvalResult(result); // Store it just in case, though we are auto-advancing
+                
+                // Show toast for each error/reason with 4 second duration
+                if (parsedResult && parsedResult.reasons && Array.isArray(parsedResult.reasons) && parsedResult.reasons.length > 0) {
+                    parsedResult.reasons.forEach((reason, index) => {
+                        // Stagger the toasts with 1 second delay between each
+                        setTimeout(() => {
+                            toast.error(reason, {
+                                duration: 4000, // 4 seconds
+                                id: `error-${index}-${Date.now()}`, // Unique ID for each toast
+                            });
+                        }, index * 500); // 1 second delay between toasts
+                    });
+                } else {
+                    // Fallback: show the full result if no reasons array
+                    toast.error('Evaluation failed', {
+                        duration: 4000, // 4 seconds
+                    });
+                }
+                
                 await executeFailSequence(userInput);
             } else {
                 setEvalResult(null); // Clear result since we are auto-advancing

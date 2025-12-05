@@ -122,7 +122,18 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans overflow-hidden">
-      <Toaster position="top-center" richColors />
+      <Toaster 
+        position="bottom-right" 
+        richColors 
+        expand={true}
+        gap={12}
+        visibleToasts={10}
+        toastOptions={{
+          style: {
+            marginBottom: '8px',
+          },
+        }}
+      />
 
       {/* Sidebar */}
       <aside 
