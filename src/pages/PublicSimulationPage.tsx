@@ -5,7 +5,7 @@ import type { Step } from '../types';
 import { normalizeStep } from '../types';
 import { stepService } from '../services/stepService';
 import { settingsService } from '../services/settingsService';
-import { toast } from 'sonner';
+import { toast, Toaster } from 'sonner';
 import { aiService } from '../services/aiService';
 
 export const PublicSimulationPage: React.FC = () => {
@@ -97,6 +97,18 @@ export const PublicSimulationPage: React.FC = () => {
 
   return (
     <div className="h-screen w-screen overflow-hidden">
+      <Toaster 
+        position="bottom-right" 
+        richColors 
+        expand={true}
+        gap={12}
+        visibleToasts={10}
+        toastOptions={{
+          style: {
+            marginBottom: '8px',
+          },
+        }}
+      />
       <SimulationRunner 
         steps={steps} 
         onExecute={handleExecuteStep}
